@@ -888,6 +888,7 @@ class MainMenu(Entity):
                 lake_track.alpha = 255
 
         def grass_track_func_ai():
+            print("reinforcement learning")
             if grass_track.unlocked:
                 self.start_menu.disable()
                 for track in self.tracks:
@@ -899,6 +900,7 @@ class MainMenu(Entity):
 
                 grass_track.enable()
                 mouse.locked = True
+                #set camera
                 learn = None
                 self.car.position = (-80, -30, 18.5)
                 self.car.rotation = (0, 90, 0)
@@ -906,7 +908,7 @@ class MainMenu(Entity):
                 self.car.visible = True
                 self.car.collision = False
                 cars = []
-                for rl_car in self.cars:
+                for i, rl_car in enumerate(self.cars):
                     
                     rl_car.position = (-80, -30, 18.5)
                     rl_car.rotation = (0, 90, 0)

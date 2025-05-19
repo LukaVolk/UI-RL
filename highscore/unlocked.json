@@ -4,7 +4,7 @@
         "grass_track": true,
         "snow_track": true,
         "forest_track": true,
-        "savannah_track": false,
+        "savannah_track": true,
         "lake_track": false
     },
     "beat_mandaw": {
