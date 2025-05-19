@@ -911,9 +911,12 @@ class MainMenu(Entity):
                     rl_car.position = (-80, -30, 18.5)
                     rl_car.rotation = (0, 90, 0)
                     rl_car.visible = True
-                    rl_car.collision = False
+                    rl_car.collision = False          
                     cars.append(rl_car)
-
+                
+                for rl_car in cars:
+                    rl_car.update()
+                self.car.update()
                 #for _ in range(100):
                 #    if learn is not None:
                 #        cars = learn.cars
