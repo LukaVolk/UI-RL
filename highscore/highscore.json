@@ -1,11 +1,11 @@
 {
     "race": {
-        "sand_track": 0.0,
-        "grass_track": 0.0,
-        "snow_track": 0.0,
-        "forest_track": 0.0,
-        "savannah_track": 0.0,
-        "lake_track": 0.0
+        "sand_track": 14.175273000000004,
+        "grass_track": 19.241208,
+        "snow_track": 33.738203999999996,
+        "forest_track": 26.216429999999974,
+        "savannah_track": 14.84991100000002,
+        "lake_track": 40.91754999999995
     },
     "time_trial": {
         "sand_track": 0,
