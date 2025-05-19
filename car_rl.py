@@ -6,8 +6,8 @@ import json
 sign = lambda x: -1 if x < 0 else (1 if x > 0 else 0)
 Text.default_resolution = 1080 * Text.size
 
-class Car(Entity):
-    def __init__(self, position = (0, 0, 4), rotation = (0, 0, 0), topspeed = 30, acceleration = 0.35, braking_strength = 30, friction = 0.6, camera_speed = 8, drift_speed = 35):
+class CarRL(Entity):
+    def __init__(self, car, grass_track, position = (0, 0, 4), rotation = (0, 0, 0), topspeed = 30, acceleration = 0.35, braking_strength = 30, friction = 0.6, drift_speed = 35):
         super().__init__(
             model = "sports-car.obj",
             texture = "sports-red.png",
@@ -21,6 +21,14 @@ class Car(Entity):
 
         # Controls
         self.controls = "wasd"
+        self.car = car
+        #tracks
+        # Makes the track accessible
+        self.grass_track = grass_track
+
+        self.current_track = self.grass_track
+
+        self.tracks = [self.grass_track]
 
         # Car's values
         self.speed = 0
@@ -30,7 +38,6 @@ class Car(Entity):
         self.steering_amount = 8
         self.topspeed = topspeed
         self.braking_strenth = braking_strength
-        self.camera_speed = camera_speed
         self.acceleration = acceleration
         self.friction = friction
         self.drift_speed = drift_speed
@@ -40,29 +47,14 @@ class Car(Entity):
         self.min_drift_speed = 20
         self.pivot_rotation_distance = 1
 
-        # Camera Follow
-        self.camera_angle = "top"
-        self.camera_offset = (0, 60, -70)
-        self.camera_rotation = 40
-        self.camera_follow = False
-        self.change_camera = False
-        self.c_pivot = Entity()
-        self.camera_pivot = Entity(parent = self.c_pivot, position = self.camera_offset)
-
         # Pivot for drifting
         self.pivot = Entity()
         self.pivot.position = self.position
         self.pivot.rotation = self.rotation
         self.drifting = False
 
-        # Car sensors
-        self.show_sensors = True
-        self.sensor_rays = []
-        self.sensor_length = 100
-
         # Car Type
         self.car_type = "sports"
-        self.print_timer = 0
 
         # Particles
         self.particle_time = 0
@@ -82,7 +74,7 @@ class Car(Entity):
         self.start_trail = True
 
         # Audio
-        self.audio = False
+        self.audio = True
         self.volume = 1
         self.start_sound = True
         self.start_fall = True
@@ -95,14 +87,6 @@ class Car(Entity):
         # Collision
         self.copy_normals = False
         self.hitting_wall = False
-
-        # Making tracks accessible in update
-        self.sand_track = None
-        self.grass_track = True
-        self.snow_track = None
-        self.forest_track = None
-        self.savannah_track = None
-        self.lake_track = None
 
         # Cosmetics
         self.current_cosmetic = "none"
@@ -169,21 +153,9 @@ class Car(Entity):
         self.rl = False
         self.ai_cars = []
 
-        # Show sensors
-        if self.show_sensors and self.gamemode == "race":
-            for _ in range(5):
-                ray = Entity(model='cube', scale=(0.1, 0.1, self.sensor_length), color=color.green)
-                ray.disable()
-                self.sensor_rays.append(ray)
-
         # Shows whether you are connected to a server or not
         self.connected_text = True
         self.disconnected_text = True
-
-        # Camera shake
-        self.shake_amount = 0.1
-        self.can_shake = False
-        self.camera_shake_option = True
 
         # Get highscore from json file
         path = os.path.dirname(sys.argv[0])
@@ -354,89 +326,10 @@ class Car(Entity):
         for cosmetic in self.cosmetics:
             cosmetic.y = 0.3
 
-    def get_sensor_distances(self):
-        """Returns distances from sensors in all directions"""
-        directions = [
-            (0, 0, 1),      # Forward
-            (0.7, 0, 0.7),  # Forward Right
-            (1, 0, 0),      # Right
-            (-1, 0, 0),     # Left
-            (-0.7, 0, 0.7), # Forward Left
-        ]
-        
-        distances = []
-        
-        for i, direction in enumerate(directions):
-            # Rotate direction based on car's rotation
-            rotated_direction = self.forward * direction[2] + self.right * direction[0]
-            
-            # Cast ray
-            ray = raycast(
-                origin=self.world_position,
-                direction=rotated_direction,
-                distance=self.sensor_length,
-                ignore=[self]
-            )
-            
-            # Get distance or max length if no hit
-            distance = ray.distance if ray.hit else self.sensor_length
-            distances.append(distance)
-            
-            # Update sensor visualization
-            if self.show_sensors and i < len(self.sensor_rays):
-                ray_entity = self.sensor_rays[i]
-                # Position the ray to start from car's position
-                ray_entity.world_position = self.world_position
-                ray_entity.look_at(self.world_position + rotated_direction * distance)
-                ray_entity.world_position += rotated_direction * (distance/2)
-                ray_entity.scale_z = distance
-                ray_entity.enable()
-
-        car_state = {
-            'speed': self.speed,
-            'inputs': {
-                'forward': held_keys[self.controls[0]] or held_keys['up arrow'],
-                'left': held_keys[self.controls[1]] or held_keys['left arrow'],
-                'backward': held_keys[self.controls[2]] or held_keys['down arrow'],
-                'right': held_keys[self.controls[3]] or held_keys['right arrow'],
-                'handbrake': held_keys['space']
-            }
-        }
-
-        #print("Car state:", car_state)
-        
-        return car_state, distances
-    
-    def calculate_reward(self):
-        reward = 0
-        
-        # Get checkpoint data from current track
-        if hasattr(self, 'current_track'):
-            checkpoint_data = self.current_track.get_checkpoint_data()
-            next_checkpoint = checkpoint_data['positions'][self.current_checkpoint]
-            
-            # Calculate distance to next checkpoint
-            distance = (self.position - next_checkpoint).length()
-            if distance < self.last_distance:
-                reward += 0.1
-            
-            # Big reward for hitting checkpoint
-            if checkpoint_data['status'][self.current_checkpoint]:
-                reward += 10.0
-                self.current_checkpoint = (self.current_checkpoint + 1) % checkpoint_data['total']
-            
-            self.last_distance = distance
-        
-        return reward
-
     def update(self):
         # Stopwatch/Timer
         # Race Gamemode
         if self.gamemode == "race":
-            self.print_timer += time.dt  # Add elapsed time
-            if self.print_timer >= 5:
-                self.print_timer = 0
-            self.get_sensor_distances()
             self.highscore.text = str(round(self.highscore_count, 1))
             self.laps_text.disable()
             if self.timer_running:
@@ -526,52 +419,6 @@ class Car(Entity):
         else:
             self.reset_count_timer.text = str(int(self.reset_count))
 
-        # Read the username
-        with open(self.username_path, "r") as username:
-            self.username_text = username.read()
-
-        self.pivot.position = self.position
-        self.c_pivot.position = self.position
-        self.c_pivot.rotation_y = self.rotation_y
-        self.camera_pivot.position = self.camera_offset
-
-        # Camera
-        if self.camera_follow:
-            # Side Camera Angle
-            if self.camera_angle == "side":
-                camera.rotation = (35, -20, 0)
-                self.camera_speed = 8
-                self.change_camera = False
-                camera.world_position = lerp(camera.world_position, self.world_position + (20, 40, -50), time.dt * self.camera_speed)
-            # Top Camera Angle
-            elif self.camera_angle == "top":
-                if self.change_camera:
-                    camera.rotation_x = 35
-                    self.camera_rotation = 40
-                self.camera_offset = (0, 60, -70)
-                self.camera_speed = 4
-                self.change_camera = False
-                camera.rotation_x = lerp(camera.rotation_x, self.camera_rotation, 2 * time.dt)
-                camera.world_position = lerp(camera.world_position, self.camera_pivot.world_position, time.dt * self.camera_speed / 2)
-                camera.world_rotation_y = lerp(camera.world_rotation_y, self.world_rotation_y, time.dt * self.camera_speed / 2)
-            # Third Person Camera Angle
-            elif self.camera_angle == "behind":
-                if self.change_camera:
-                    camera.rotation_x = 12
-                    self.camera_rotation = 40
-                self.camera_offset = (0, 10, -30)
-                self.change_camera = False
-                self.camera_speed = 8
-                camera.rotation_x = lerp(camera.rotation_x, self.camera_rotation / 3, 2 * time.dt)
-                camera.world_position = lerp(camera.world_position, self.camera_pivot.world_position, time.dt * self.camera_speed / 2)
-                camera.world_rotation_y = lerp(camera.world_rotation_y, self.world_rotation_y, time.dt * self.camera_speed / 2)
-            # First Person Camera Angle
-            elif self.camera_angle == "first-person":
-                self.change_camera = False
-                self.camera_speed = 8
-                camera.world_position = lerp(camera.world_position, self.world_position + (0.5, 0, 0), time.dt * 30)
-                camera.world_rotation = lerp(camera.world_rotation, self.world_rotation, time.dt * 30)
-
         # The y rotation distance between the car and the pivot
         self.pivot_rotation_distance = (self.rotation_y - self.pivot.rotation_y)
 
@@ -581,7 +428,6 @@ class Car(Entity):
                 self.pivot.rotation_y -= (self.drift_speed * ((self.pivot.rotation_y - self.rotation_y) / 40)) * time.dt
                 if self.speed > 1 or self.speed < -1:
                     self.speed += self.pivot_rotation_distance / self.drift_amount * time.dt
-                self.camera_rotation -= self.pivot_rotation_distance / 3 * time.dt
                 self.rotation_speed -= 1 * time.dt
                 if self.pivot_rotation_distance >= 50 or self.pivot_rotation_distance <= -50:
                     self.drift_speed += self.pivot_rotation_distance / 5 * time.dt
@@ -591,7 +437,6 @@ class Car(Entity):
                 self.pivot.rotation_y += (self.drift_speed * ((self.rotation_y - self.pivot.rotation_y) / 40)) * time.dt
                 if self.speed > 1 or self.speed < -1:
                     self.speed -= self.pivot_rotation_distance / self.drift_amount * time.dt
-                self.camera_rotation += self.pivot_rotation_distance / 3 * time.dt
                 self.rotation_speed += 1 * time.dt
                 if self.pivot_rotation_distance >= 50 or self.pivot_rotation_distance <= -50:
                     self.drift_speed -= self.pivot_rotation_distance / 5 * time.dt
@@ -607,7 +452,7 @@ class Car(Entity):
         # Find all Car instances and add them to the ignore list for raycasts
         ignore_entities = [self]
         for e in scene.entities:
-            if isinstance(e, Car) and e is not self:
+            if isinstance(e, CarRL) and e is not self:
                 ignore_entities.append(e)
 
         # You can use ignore_entities in your raycasts like:
@@ -620,11 +465,10 @@ class Car(Entity):
 
         if y_ray.distance <= 5:
             # Driving
-            if held_keys[self.controls[0]] or held_keys["up arrow"]:
+            if held_keys[self.controls[0]] or held_keys["up arrow"]: #
                 self.speed += self.acceleration * 50 * time.dt
                 self.speed += -self.velocity_y * 4 * time.dt
 
-                self.camera_rotation -= self.acceleration * 30 * time.dt
                 self.driving = True
 
                 # Particles
@@ -665,7 +509,6 @@ class Car(Entity):
                     self.speed -= self.friction * 5 * time.dt
                 elif self.speed < -1:
                     self.speed += self.friction * 5 * time.dt
-                self.camera_rotation += self.friction * 20 * time.dt
 
             # Braking
             if held_keys[self.controls[2] or held_keys["down arrow"]]:
@@ -783,32 +626,6 @@ class Car(Entity):
         if self.y >= 300:
             self.reset_car()
 
-        # Cap the camera rotation
-        if self.camera_rotation >= 40:
-            self.camera_rotation = 40
-        elif self.camera_rotation <= 30:
-            self.camera_rotation = 30
-
-        # Camera Shake
-        if self.speed >= 1 and self.driving:
-            self.can_shake = True
-            if self.pivot_rotation_distance > 0:
-                self.shake_amount = self.speed * self.pivot_rotation_distance / 200
-            elif self.pivot_rotation_distance < 0:
-                self.shake_amount = self.speed * -self.pivot_rotation_distance / 200
-        else:
-            self.can_shake = False
-
-        # Cap the camera shake amount
-        if self.shake_amount <= 0:
-            self.shake_amount = 0
-        if self.shake_amount >= 0.03:
-            self.shake_amount = 0.03
-
-        # If the camera can shake and camera shake is on, then shake the camera
-        if self.can_shake and self.camera_shake_option and self.camera_angle != "first-person":
-            self.shake_camera()
-
         # Rotation
         self.rotation_parent.position = self.position
 
@@ -893,7 +710,6 @@ class Car(Entity):
         elif self.lake_track.enabled:
             self.position = (-121, -40, 158)
             self.rotation = (0, 90, 0)
-        camera.world_rotation_y = self.rotation_y
         self.speed = 0
         self.velocity_y = 0
         self.anti_cheat = 1
@@ -1087,12 +903,8 @@ class Car(Entity):
         """
         Declares variables with data from a json file
         """
-        self.sand_track.unlocked = self.unlocked["tracks"]["sand_track"]
-        self.grass_track.unlocked = self.unlocked["tracks"]["grass_track"]
-        self.snow_track.unlocked = self.unlocked["tracks"]["snow_track"]
-        self.forest_track.unlocked = self.unlocked["tracks"]["forest_track"]
-        self.savannah_track.unlocked = self.unlocked["tracks"]["savannah_track"]
-        self.lake_track.unlocked = self.unlocked["tracks"]["lake_track"]
+
+        self.grass_track.unlocked = True
 
         self.beat_mandaw_sand_track = self.unlocked["beat_mandaw"]["sand_track"]
         self.beat_mandaw_grass_track = self.unlocked["beat_mandaw"]["grass_track"]
@@ -1164,7 +976,7 @@ class Car(Entity):
         self.unlocked_dict = {
             "tracks": {
                 "sand_track": self.sand_track.unlocked,
-                "grass_track": self.grass_track.unlocked,
+                "grass_track": True,
                 "snow_track": self.snow_track.unlocked,
                 "forest_track": self.forest_track.unlocked,
                 "savannah_track": self.savannah_track.unlocked,
@@ -1312,14 +1124,6 @@ class Car(Entity):
             text.animate_scale((top, top, top), curve = curve.out_expo)
             invoke(text.animate_scale, (bottom, bottom, bottom), delay = 0.2)
 
-    def shake_camera(self):
-        """
-        Camera shake
-        """
-        camera.x += random.randint(-1, 1) * self.shake_amount
-        camera.y += random.randint(-1, 1) * self.shake_amount
-        camera.z += random.randint(-1, 1) * self.shake_amount
-
     def update_model_path(self):
         """
         Updates the model's file path for multiplayer
@@ -1328,7 +1132,7 @@ class Car(Entity):
         invoke(self.update_model_path, delay = 3)
 
 # Class for copying the car's position, rotation for multiplayer
-class CarRepresentation(Entity):
+class CarRepresentationRL(Entity):
     def __init__(self, car, position = (0, 0, 0), rotation = (0, 65, 0)):
         super().__init__(
             parent = scene,
@@ -1369,20 +1173,3 @@ class CarRepresentation(Entity):
                     cosmetic.y = 0
 
         invoke(self.update_representation, delay = 5)
-
-# Username shown above the car
-class CarUsername(Text):
-    def __init__(self, car):
-        super().__init__(
-            parent = car,
-            text = "Guest",
-            y = 3,
-            scale = 30,
-            color = color.white,
-            billboard = True
-        )
-    
-        self.username_text = "Guest"
-
-    def update(self):
-        self.text = self.username_text

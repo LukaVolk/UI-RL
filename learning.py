@@ -2,6 +2,7 @@ from ursina import *
 from direct.stdpy import thread
 
 from car import Car
+from car_rl import CarRL
 from ai import AICar
 
 from multiplayer import Multiplayer
@@ -106,20 +107,6 @@ except Exception as e:
 car = Car()
 car.sports_car()
 
-cars = [Car() for _ in range(10)]
-for car_i in cars:
-    sand_track = SandTrack(car_i)
-    grass_track = GrassTrack(car_i)
-    snow_track = SnowTrack(car_i)
-    forest_track = ForestTrack(car_i)
-    savannah_track = SavannahTrack(car_i)
-    lake_track = LakeTrack(car_i)
-    car_i.sand_track = sand_track
-    car_i.grass_track = grass_track
-    car_i.snow_track = snow_track
-    car_i.forest_track = forest_track
-    car_i.savannah_track = savannah_track
-    car_i.lake_track = lake_track
 # Tracks
 sand_track = SandTrack(car)
 grass_track = GrassTrack(car)
@@ -134,6 +121,10 @@ car.snow_track = snow_track
 car.forest_track = forest_track
 car.savannah_track = savannah_track
 car.lake_track = lake_track
+
+cars = [CarRL(car, grass_track) for _ in range(3)]
+for car_i in cars:
+    car_i.visible = False
 
 # AI
 ai_list = []
