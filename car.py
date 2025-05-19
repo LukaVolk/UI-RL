@@ -62,6 +62,7 @@ class Car(Entity):
 
         # Car Type
         self.car_type = "sports"
+        self.print_timer = 0
 
         # Particles
         self.particle_time = 0
@@ -390,13 +391,29 @@ class Car(Entity):
                 ray_entity.world_position += rotated_direction * (distance/2)
                 ray_entity.scale_z = distance
                 ray_entity.enable()
+
+        car_state = {
+            'speed': self.speed,
+            'inputs': {
+                'forward': held_keys[self.controls[0]] or held_keys['up arrow'],
+                'left': held_keys[self.controls[1]] or held_keys['left arrow'],
+                'backward': held_keys[self.controls[2]] or held_keys['down arrow'],
+                'right': held_keys[self.controls[3]] or held_keys['right arrow'],
+                'handbrake': held_keys['space']
+            }
+        }
+
+        print("Car state:", car_state)
         
-        return distances
+        return car_state, distances
 
     def update(self):
         # Stopwatch/Timer
         # Race Gamemode
         if self.gamemode == "race":
+            self.print_timer += time.dt  # Add elapsed time
+            if self.print_timer >= 5:
+                self.print_timer = 0
             self.get_sensor_distances()
             self.highscore.text = str(round(self.highscore_count, 1))
             self.laps_text.disable()
