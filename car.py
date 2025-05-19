@@ -55,6 +55,11 @@ class Car(Entity):
         self.pivot.rotation = self.rotation
         self.drifting = False
 
+        # Car sensors
+        self.show_sensors = True
+        self.sensor_rays = []
+        self.sensor_length = 100
+
         # Car Type
         self.car_type = "sports"
 
@@ -162,6 +167,13 @@ class Car(Entity):
         # Reinforcement learning
         self.rl = False
         self.ai_cars = []
+
+        # Show sensors
+        if self.show_sensors and self.gamemode == "race":
+            for _ in range(5):
+                ray = Entity(model='cube', scale=(0.1, 0.1, self.sensor_length), color=color.green)
+                ray.disable()
+                self.sensor_rays.append(ray)
 
         # Shows whether you are connected to a server or not
         self.connected_text = True
@@ -341,10 +353,51 @@ class Car(Entity):
         for cosmetic in self.cosmetics:
             cosmetic.y = 0.3
 
+    def get_sensor_distances(self):
+        """Returns distances from sensors in all directions"""
+        directions = [
+            (0, 0, 1),      # Forward
+            (0.7, 0, 0.7),  # Forward Right
+            (1, 0, 0),      # Right
+            (-1, 0, 0),     # Left
+            (-0.7, 0, 0.7), # Forward Left
+        ]
+        
+        distances = []
+        
+        for i, direction in enumerate(directions):
+            # Rotate direction based on car's rotation
+            rotated_direction = self.forward * direction[2] + self.right * direction[0]
+            
+            # Cast ray
+            ray = raycast(
+                origin=self.world_position,
+                direction=rotated_direction,
+                distance=self.sensor_length,
+                ignore=[self]
+            )
+            
+            # Get distance or max length if no hit
+            distance = ray.distance if ray.hit else self.sensor_length
+            distances.append(distance)
+            
+            # Update sensor visualization
+            if self.show_sensors and i < len(self.sensor_rays):
+                ray_entity = self.sensor_rays[i]
+                # Position the ray to start from car's position
+                ray_entity.world_position = self.world_position
+                ray_entity.look_at(self.world_position + rotated_direction * distance)
+                ray_entity.world_position += rotated_direction * (distance/2)
+                ray_entity.scale_z = distance
+                ray_entity.enable()
+        
+        return distances
+
     def update(self):
         # Stopwatch/Timer
         # Race Gamemode
         if self.gamemode == "race":
+            self.get_sensor_distances()
             self.highscore.text = str(round(self.highscore_count, 1))
             self.laps_text.disable()
             if self.timer_running:
