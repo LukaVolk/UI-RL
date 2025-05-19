@@ -403,9 +403,31 @@ class Car(Entity):
             }
         }
 
-        print("Car state:", car_state)
+        #print("Car state:", car_state)
         
         return car_state, distances
+    
+    def calculate_reward(self):
+        reward = 0
+        
+        # Get checkpoint data from current track
+        if hasattr(self, 'current_track'):
+            checkpoint_data = self.current_track.get_checkpoint_data()
+            next_checkpoint = checkpoint_data['positions'][self.current_checkpoint]
+            
+            # Calculate distance to next checkpoint
+            distance = (self.position - next_checkpoint).length()
+            if distance < self.last_distance:
+                reward += 0.1
+            
+            # Big reward for hitting checkpoint
+            if checkpoint_data['status'][self.current_checkpoint]:
+                reward += 10.0
+                self.current_checkpoint = (self.current_checkpoint + 1) % checkpoint_data['total']
+            
+            self.last_distance = distance
+        
+        return reward
 
     def update(self):
         # Stopwatch/Timer
