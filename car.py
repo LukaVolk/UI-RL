@@ -76,7 +76,7 @@ class Car(Entity):
         self.start_trail = True
 
         # Audio
-        self.audio = True
+        self.audio = False
         self.volume = 1
         self.start_sound = True
         self.start_fall = True
