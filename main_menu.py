@@ -2,11 +2,20 @@ from ursina import *
 from ursina import curve
 from server import Server
 import os
+from car import Car
+from reinforcment_learning import ReinforcementLearning
+from tracks.sand_track import SandTrack
+from tracks.grass_track import GrassTrack
+from tracks.snow_track import SnowTrack
+from tracks.forest_track import ForestTrack
+from tracks.savannah_track import SavannahTrack
+from tracks.lake_track import LakeTrack
+
 
 Text.default_resolution = 1080 * Text.size
 
 class MainMenu(Entity):
-    def __init__(self, car, ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track):
+    def __init__(self, car, ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track, cars):
         super().__init__(
             parent = camera.ui
         )
@@ -37,6 +46,9 @@ class MainMenu(Entity):
             self.audio_menu, self.controls_menu, self.garage_menu, self.pause_menu, self.quit_menu
         ]
         
+        #RL cars
+        self.cars = cars
+
         self.car = car
         self.sand_track = sand_track
         self.grass_track = grass_track
@@ -125,9 +137,10 @@ class MainMenu(Entity):
 
         singleplayer_button = Button(text = "Singleplayer", color = color.gray, highlight_color = color.light_gray, scale_y = 0.1, scale_x = 0.3, y = 0.05, parent = self.start_menu)
         multiplayer_button = Button(text = "Multiplayer", color = color.gray, highlight_color = color.light_gray, scale_y = 0.1, scale_x = 0.3, y = -0.08, parent = self.start_menu)
-        
+    
         singleplayer_button.on_click = Func(singleplayer)
         multiplayer_button.on_click = Func(multiplayer)
+        
 
         # Quit Menu
 
@@ -874,6 +887,69 @@ class MainMenu(Entity):
                 unlocked_text.disable()
                 lake_track.alpha = 255
 
+        def grass_track_func_ai():
+            if grass_track.unlocked:
+                self.start_menu.disable()
+                for track in self.tracks:
+                        track.disable()
+                        for i in track.track:
+                            i.disable()
+                        for i in track.details:
+                            i.disable()
+
+                grass_track.enable()
+                mouse.locked = True
+                learn = None
+                self.car.position = (-80, -30, 18.5)
+                self.car.rotation = (0, 90, 0)
+                self.car.reset_count_timer.enable()
+                self.car.visible = True
+                self.car.collision = False
+                cars = []
+                for rl_car in self.cars:
+                    
+                    rl_car.position = (-80, -30, 18.5)
+                    rl_car.rotation = (0, 90, 0)
+                    rl_car.visible = True
+                    rl_car.collision = False
+                    cars.append(rl_car)
+
+                #for _ in range(100):
+                #    if learn is not None:
+                #        cars = learn.cars
+                #        for car in cars:
+                #            car.position = (-80, -30, 18.5) + (random.randint(-2, 2), random.randint(-2, 2), random.randint(-2, 2))
+                #            car.rotation = (0, 90, 0)
+                #            car.visible = True
+                #    else:
+                #        cars = []
+                #        for rl_car in range(10):
+                #            car = Car()
+                #            car.position = (-80, -30, 18.5) + (random.randint(-2, 2), random.randint(-2, 2), random.randint(-2, 2))
+                #            car.rotation = (0, 90, 0)
+                #            car.visible = True
+                #            cars.append(car)
+                #    
+                #    time.sleep(10)
+                #
+                #    rl = ReinforcementLearning(cars, grass_track)
+                #    learn = rl.start()
+
+                grass_track.played = True
+
+                for g in grass_track.track:
+                    g.enable()
+                    g.alpha = 255
+                if self.car.graphics != "ultra fast":
+                    for detail in grass_track.details:
+                        detail.enable()
+                        detail.alpha = 255
+                if self.car.graphics == "fast":
+                    grass_track.grass.disable()
+            
+            else:
+                unlocked_text.shake()
+
         start_button = Button(text = "Start Game", color = color.black, scale_y = 0.1, scale_x = 0.3, y = 0.02, parent = self.main_menu)
         sand_track_button = Button(text = "Sand Track", color = color.black, scale_y = 0.1, scale_x = 0.3, y = 0.3, x = -0.5, parent = self.maps_menu)
         grass_track_button = Button(text = "Grass Track", color = color.black, scale_y = 0.1, scale_x = 0.3, y = 0.3, x = 0, parent = self.maps_menu)
@@ -924,6 +1000,10 @@ class MainMenu(Entity):
         lake_track_button.on_click = Func(lake_track_func)
         ai_button.on_click = Func(ai_func)
         back_button.on_click = Func(back)
+
+        #Reinforcement Learning Menu
+        reinforcment_learning_button = Button(text = "Reinforcement Learning", color = color.gray, highlight_color = color.light_gray, scale_y = 0.1, scale_x = 0.3, y = -0.21, parent = self.start_menu)
+        reinforcment_learning_button.on_click = Func(grass_track_func_ai)
 
         # Race Menu
 

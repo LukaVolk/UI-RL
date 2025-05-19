@@ -30,7 +30,7 @@
             "green": true,
             "orange": false,
             "black": false,
-            "white": false
+            "white": true
         },
         "muscle_car": {
             "red": true,
