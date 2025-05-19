@@ -159,6 +159,10 @@ class Car(Entity):
         self.multiplayer_update = False
         self.server_running = False
 
+        # Reinforcement learning
+        self.rl = False
+        self.ai_cars = []
+
         # Shows whether you are connected to a server or not
         self.connected_text = True
         self.disconnected_text = True
@@ -506,8 +510,20 @@ class Car(Entity):
         movementY = self.velocity_y / 50
         direction = (0, sign(movementY), 0)
 
+
+        # Disable collision with other Car entities
+        # Find all Car instances and add them to the ignore list for raycasts
+        ignore_entities = [self]
+        for e in scene.entities:
+            if isinstance(e, Car) and e is not self:
+                ignore_entities.append(e)
+        # You can use ignore_entities in your raycasts like:
+        # y_ray = raycast(origin=self.world_position, direction=(0, -1, 0), ignore=ignore_entities)
+        # (To apply this, move the ignore_entities logic above the raycast if you want all raycasts to ignore Cars)
+
+
         # Main raycast for collision
-        y_ray = raycast(origin = self.world_position, direction = (0, -1, 0), ignore = [self, ])
+        y_ray = raycast(origin = self.world_position, direction = (0, -1, 0), ignore = [self + ignore_entities])
 
         if y_ray.distance <= 5:
             # Driving

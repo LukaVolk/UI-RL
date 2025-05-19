@@ -1,9 +1,9 @@
 {
     "tracks": {
         "sand_track": true,
-        "grass_track": false,
-        "snow_track": false,
-        "forest_track": false,
+        "grass_track": true,
+        "snow_track": true,
+        "forest_track": true,
         "savannah_track": false,
         "lake_track": false
     },
@@ -18,19 +18,19 @@
     "cars": {
         "sports_car": true,
         "muscle_car": false,
-        "limo": false,
+        "limo": true,
         "lorry": false,
-        "hatchback": false,
+        "hatchback": true,
         "rally_car": false
     },
     "textures": {
         "sports_car": {
             "red": true,
             "blue": true,
-            "green": false,
+            "green": true,
             "orange": false,
             "black": false,
-            "white": false
+            "white": true
         },
         "muscle_car": {
             "red": false,

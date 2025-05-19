@@ -1,3 +1,24 @@
 {
-    "achievements_got_names": []
+  "achievements_got_names": [
+    "Play the game!",
+    "Go to the Garage!",
+    "Race on Sand Track for the first time!",
+    "Get under 20s on Sand Track!",
+    "Unlock Hatchback!",
+    "Unlock Grass Track!",
+    "Get under 17s on Sand Track!",
+    "Race on Grass Track for the first time!",
+    "Get under 22s on Grass Track!",
+    "Get under 20s on Grass Track!",
+    "Unlock Limo!",
+    "Unlock Sports Car Green!",
+    "Unlock Snow Track!",
+    "Race on Snow Track for the first time!",
+    "Race against AI!",
+    "Get under 40s on Snow Track!",
+    "Unlock Forest Track!",
+    "Get under 36s on Snow Track!",
+    "Unlock Sports Car White!",
+    "Play Time Trial!"
+  ]
 }
