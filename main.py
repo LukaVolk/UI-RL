@@ -135,7 +135,7 @@ ai_list.append(ai2)
 car.ai_list = ai_list
 
 # Main menu
-main_menu = MainMenu(car, ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track)
+main_menu = MainMenu(car, ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track, [])
 
 # Achievements
 achievements = RallyAchievements(car, main_menu, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track)

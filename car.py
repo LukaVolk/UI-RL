@@ -518,14 +518,13 @@ class Car(Entity):
             if isinstance(e, Car) and e is not self:
                 ignore_entities.append(e)
 
-        print(len(ignore_entities))  # Debugging line to see how many entities are being ignored
         # You can use ignore_entities in your raycasts like:
         # y_ray = raycast(origin=self.world_position, direction=(0, -1, 0), ignore=ignore_entities)
         # (To apply this, move the ignore_entities logic above the raycast if you want all raycasts to ignore Cars)
 
 
         # Main raycast for collision
-        y_ray = raycast(origin = self.world_position, direction = (0, -1, 0), ignore = [self] + ignore_entities)
+        y_ray = raycast(origin = self.world_position, direction = (0, -1, 0), ignore = ignore_entities)
 
         if y_ray.distance <= 5:
             # Driving
@@ -767,14 +766,14 @@ class Car(Entity):
         # Collision Detection
         if movementX != 0:
             direction = (sign(movementX), 0, 0)
-            x_ray = raycast(origin = self.world_position, direction = direction, ignore = [self] + ignore_entities)
+            x_ray = raycast(origin = self.world_position, direction = direction, ignore = ignore_entities)
 
             if x_ray.distance > self.scale_x / 2 + abs(movementX):
                 self.x += movementX
 
         if movementZ != 0:
             direction = (0, 0, sign(movementZ))
-            z_ray = raycast(origin = self.world_position, direction = direction, ignore = [self] + ignore_entities)
+            z_ray = raycast(origin = self.world_position, direction = direction, ignore = ignore_entities)
 
             if z_ray.distance > self.scale_z / 2 + abs(movementZ):
                 self.z += movementZ
