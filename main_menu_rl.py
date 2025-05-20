@@ -114,8 +114,20 @@ class MainMenuRL(Entity):
             grass_track_rl.enable()
             mouse.locked = True
             #set camera
-            camera.rotation = (0, 0, 0)
-            camera.position = (-80, -30, 18.5)
+            # 1. Position the camera even higher and to the side
+            # Experiment with these values!
+            sky_height = 300  # Much higher in the sky
+            side_offset_x = 0 # Move it 30 units on the X-axis (e.g., to the "right")
+            side_offset_z = 200 # Move it 40 units on the Z-axis (e.g., "behind" the center)
+
+            camera.position = (side_offset_x, sky_height, side_offset_z)
+
+            # 2. Make the camera look at the center of your map
+            # If your map isn't centered at (0,0,0), change the target coordinates here
+            camera.look_at((0, 0, 0)) # Look at the origin, which we assume is your map's center
+            camera_roll_angle = 0 # Example: tilt 15 degrees to the left
+            camera.rotation_z = camera_roll_angle
+            camera.position = (side_offset_x, sky_height, side_offset_z+50)
             learn = None
             cars = []
             

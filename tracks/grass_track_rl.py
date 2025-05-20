@@ -138,7 +138,7 @@ class GrassTrackRL(Entity):
                 self.wall2.disable()
                 self.wall3.enable()
                 self.wall4.enable()
-                self.car.anti_cheat = 0.5
+                car.anti_cheat = 0.5
 
             if car.simple_intersects(self.wall_trigger_ramp):
                 if car.anti_cheat == 0.5:
