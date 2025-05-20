@@ -1,20 +1,12 @@
 from ursina import *
 from direct.stdpy import thread
 
-from car import Car
 from car_rl import CarRL
 
 from main_menu_rl import MainMenuRL
 
-from sun import SunLight
-
-from tracks.sand_track import SandTrack
-from tracks.grass_track import GrassTrack
+from sun_rl import SunLightRL
 from tracks.grass_track_rl import GrassTrackRL
-from tracks.snow_track import SnowTrack
-from tracks.forest_track import ForestTrack
-from tracks.savannah_track import SavannahTrack
-from tracks.lake_track import LakeTrack
 
 Text.default_font = "./assets/Roboto.ttf"
 Text.default_resolution = 1080 * Text.size
@@ -112,7 +104,7 @@ ai_list = []
 main_menu = MainMenuRL(grass_track_rl, cars)
 
 # Lighting + shadows
-sun = SunLight(direction = (-0.7, -0.9, 0.5), resolution = 3072, car = car)
+sun = SunLightRL((-0.7, -0.9, 0.5), 3072, cars)
 ambient = AmbientLight(color = Vec4(0.5, 0.55, 0.66, 0) * 0.75)
 
 render.setShaderAuto()
