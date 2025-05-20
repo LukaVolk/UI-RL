@@ -91,12 +91,12 @@ class Car(Entity):
         self.hitting_wall = False
 
         # Making tracks accessible in update
-        self.sand_track = None
+        self.sand_track = True
         self.grass_track = True
-        self.snow_track = None
-        self.forest_track = None
-        self.savannah_track = None
-        self.lake_track = None
+        self.snow_track = True
+        self.forest_track = True
+        self.savannah_track = True
+        self.lake_track = True
 
         # Cosmetics
         self.current_cosmetic = "none"

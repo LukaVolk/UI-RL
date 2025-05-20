@@ -3,14 +3,10 @@ from direct.stdpy import thread
 
 from car import Car
 from car_rl import CarRL
-from ai import AICar
 
-from multiplayer import Multiplayer
-from main_menu import MainMenu
+from main_menu_rl import MainMenuRL
 
 from sun import SunLight
-
-from achievements import RallyAchievements
 
 from tracks.sand_track import SandTrack
 from tracks.grass_track import GrassTrack
@@ -104,7 +100,7 @@ except Exception as e:
     print("error starting thread", e)
 
 # Car
-car = Car()
+car = CarRL()
 car.sports_car()
 
 # Tracks
@@ -122,28 +118,15 @@ car.forest_track = forest_track
 car.savannah_track = savannah_track
 car.lake_track = lake_track
 
-cars = [CarRL(car, grass_track) for _ in range(3)]
+cars = [CarRL(car, grass_track, sand_track, snow_track, forest_track, savannah_track, lake_track) for _ in range(10)]
 for car_i in cars:
     car_i.visible = False
 
 # AI
 ai_list = []
 
-ai = AICar(car, ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track)
-ai1 = AICar(car, ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track)
-ai2 = AICar(car, ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track)
-
-ai_list.append(ai)
-ai_list.append(ai1)
-ai_list.append(ai2)
-
-car.ai_list = ai_list
-
 # Main menu
-main_menu = MainMenu(car, ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track, cars)
-
-# Achievements
-achievements = RallyAchievements(car, main_menu, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track)
+main_menu = MainMenuRL(cars[0], ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track, cars)
 
 # Lighting + shadows
 sun = SunLight(direction = (-0.7, -0.9, 0.5), resolution = 3072, car = car)
@@ -155,51 +138,5 @@ main_menu.sun = sun
 
 # Sky
 Sky(texture = "sky")
-
-def update():
-    # If multiplayer, Call the Multiplayer class
-    if car.multiplayer:
-        global multiplayer
-        multiplayer = Multiplayer(car)
-        car.multiplayer_update = True
-        car.multiplayer = False
-    
-    # Update the multiplayer and check whether the client is connected
-    if car.multiplayer_update:
-        multiplayer.update_multiplayer()
-        if multiplayer.client.connected:
-            if car.connected_text:
-                main_menu.connected.enable()
-                car.connected_text = False
-            else:
-                invoke(main_menu.connected.disable, delay = 2)
-            main_menu.not_connected.disable()
-        else:
-            if car.disconnected_text:
-                main_menu.not_connected.enable()
-                car.disconnected_text = False
-            else:
-                invoke(main_menu.not_connected.disable, delay = 2)
-            main_menu.connected.disable()
-
-    # If the user is hosting the server, update the server
-    if car.server_running:
-        car.server.update_server()
-        if car.server.server_update:
-            car.server.easy.process_net_events()
-    
-    if achievements.time_spent < 10:
-        achievements.time_spent += time.dt
-
-def input(key):
-    # If multiplayer, send the client's position, rotation, texture, username and highscore to the server
-    if car.multiplayer_update:
-        multiplayer.client.send_message("MyPosition", tuple(car.position))
-        multiplayer.client.send_message("MyRotation", tuple(car.rotation))
-        multiplayer.client.send_message("MyTexture", str(car.texture))
-        multiplayer.client.send_message("MyUsername", str(car.username_text))
-        multiplayer.client.send_message("MyHighscore", str(round(car.highscore_count, 2)))
-        multiplayer.client.send_message("MyCosmetic", str(car.current_cosmetic))
-        multiplayer.client.send_message("MyModel", str(car.model_path))
 
 app.run()

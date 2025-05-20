@@ -7,7 +7,7 @@ sign = lambda x: -1 if x < 0 else (1 if x > 0 else 0)
 Text.default_resolution = 1080 * Text.size
 
 class CarRL(Entity):
-    def __init__(self, car, grass_track, position = (0, 0, 4), rotation = (0, 0, 0), topspeed = 30, acceleration = 0.35, braking_strength = 30, friction = 0.6, drift_speed = 35):
+    def __init__(self, car, grass_track, sand_track, snow_track, forest_track, savannah_track, lake_track, position = (0, 0, 4), rotation = (0, 0, 0), topspeed = 30, acceleration = 0.35, braking_strength = 30, friction = 0.6, drift_speed = 35, camera_speed = 8):
         super().__init__(
             model = "sports-car.obj",
             texture = "sports-red.png",
@@ -25,10 +25,26 @@ class CarRL(Entity):
         #tracks
         # Makes the track accessible
         self.grass_track = grass_track
+        self.sand_track = sand_track
+        self.snow_track = snow_track
+        self.forest_track = forest_track
+        self.savannah_track = savannah_track
+        self.lake_track = lake_track
 
         self.current_track = self.grass_track
 
-        self.tracks = [self.grass_track]
+        self.tracks = [self.grass_track, self.sand_track, self.snow_track, self.forest_track, self.savannah_track, self.lake_track]
+
+        #camera
+        # Camera Follow
+        self.camera_speed = camera_speed
+        self.camera_angle = "top"
+        self.camera_offset = (0, 0, 100)
+        self.camera_rotation = 0
+        self.camera_follow = False
+        self.change_camera = False
+        self.c_pivot = Entity()
+        self.camera_pivot = Entity(parent = self.c_pivot, position = self.camera_offset)
 
         # Car's values
         self.speed = 0
@@ -1099,18 +1115,21 @@ class CarRL(Entity):
         self.drift_multiplier = 20
         self.drifting = False
 
-        if self.sand_track.enabled:
-            self.drift_time = 25.0
-        elif self.grass_track.enabled:
-            self.drift_time = 30.0
-        elif self.snow_track.enabled:
-            self.drift_time = 50.0
-        elif self.forest_track.enabled:
-            self.drift_time = 40.0
-        elif self.savannah_track.enabled:
-            self.drift_time = 25.0
-        elif self.lake_track.enabled:
-            self.drift_time = 75.0
+        try:
+            if self.sand_track.enabled:
+                self.drift_time = 25.0
+            elif self.grass_track.enabled:
+                self.drift_time = 30.0
+            elif self.snow_track.enabled:
+                self.drift_time = 50.0
+            elif self.forest_track.enabled:
+                self.drift_time = 40.0
+            elif self.savannah_track.enabled:
+                self.drift_time = 25.0
+            elif self.lake_track.enabled:
+                self.drift_time = 75.0
+        except AttributeError:
+            print("Drift time not set, using default value of 25.0")
 
     def animate_text(self, text, top = 1.2, bottom = 0.6):
         """

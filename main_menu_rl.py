@@ -14,7 +14,7 @@ from tracks.lake_track import LakeTrack
 
 Text.default_resolution = 1080 * Text.size
 
-class MainMenu(Entity):
+class MainMenuRL(Entity):
     def __init__(self, car, ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track, cars):
         super().__init__(
             parent = camera.ui
