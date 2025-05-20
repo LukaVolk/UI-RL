@@ -1,7 +1,7 @@
 from ursina import *
 
-class GrassTrack(Entity):
-    def __init__(self, car):
+class GrassTrackRL(Entity):
+    def __init__(self, cars):
         application.audio = False
         super().__init__(
             model = "grass_track.obj", 
@@ -12,7 +12,9 @@ class GrassTrack(Entity):
             collider = "mesh"
         )
 
-        self.car = car
+        self.cars = cars if isinstance(cars, list) else [cars]
+        
+
 
         self.print_timer = 0
 
@@ -74,8 +76,7 @@ class GrassTrack(Entity):
                 rotation=(0, 90, 0)
             )
         ]
-        self.checkpoint_status = [False] * len(self.checkpoints)
-
+        self.car_checkpoints = {car: [False] * len(self.checkpoints) for car in self.cars}
 
         self.track = [
             self.finish_line, self.boundaries, self.wall1, self.wall2, self.wall3, 
@@ -98,7 +99,15 @@ class GrassTrack(Entity):
         self.played = False
         self.unlocked = False
 
-
+    # Add method to get checkpoint data
+    def get_checkpoint_data(self, car):
+        if car not in self.car_checkpoints:
+            raise ValueError(f"Car {car} not found in checkpoints.")
+        return {
+            'positions': [cp.position for cp in self.checkpoints],
+            'status': self.car_checkpoints[car],
+            'total': len(self.checkpoints)
+        }
 
     def update(self):
         # print car position every 5 seconds
@@ -115,7 +124,7 @@ class GrassTrack(Entity):
                     invoke(self.car.reset_timer, delay = 3)
 
                 self.car.check_highscore()
-                self.checkpoint_status = [False] * len(self.checkpoints)
+                self.car_checkpoints[self.car] = [False] * len(self.checkpoints)
 
             self.wall1.enable()
             self.wall2.enable()
@@ -134,9 +143,10 @@ class GrassTrack(Entity):
                 self.car.anti_cheat = 1
 
         for i, cp in enumerate(self.checkpoints):
-            if self.car.simple_intersects(cp) and not self.checkpoint_status[i]:
-                self.checkpoint_status[i] = True
-                print(f"Checkpoint {i} passed! Status: {self.checkpoint_status}")
+            if self.car.simple_intersects(cp) and not self.car_checkpoints[self.car][i]:
+                # Checkpoint passed
+                self.car_checkpoints[self.car][i] = True
+                print(f"Checkpoint {i} passed! Status: {self.car_checkpoints[self.car]}")
 
                 # Give bonus for reinforcement learning
                 # if hasattr(self.car, "give_bonus_reward"):

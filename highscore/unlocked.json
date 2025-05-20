@@ -5,7 +5,7 @@
         "snow_track": true,
         "forest_track": true,
         "savannah_track": true,
-        "lake_track": false
+        "lake_track": true
     },
     "beat_mandaw": {
         "sand_track": false,
@@ -17,11 +17,11 @@
     },
     "cars": {
         "sports_car": true,
-        "muscle_car": false,
+        "muscle_car": true,
         "limo": true,
-        "lorry": false,
+        "lorry": true,
         "hatchback": true,
-        "rally_car": false
+        "rally_car": true
     },
     "textures": {
         "sports_car": {
@@ -33,20 +33,20 @@
             "white": true
         },
         "muscle_car": {
-            "red": false,
-            "blue": false,
+            "red": true,
+            "blue": true,
             "green": false,
             "orange": true,
             "black": false,
             "white": false
         },
         "limo": {
-            "red": false,
+            "red": true,
             "blue": false,
-            "green": false,
-            "orange": false,
+            "green": true,
+            "orange": true,
             "black": true,
-            "white": false
+            "white": true
         },
         "lorry": {
             "red": false,
@@ -57,7 +57,7 @@
             "white": true
         },
         "hatchback": {
-            "red": false,
+            "red": true,
             "blue": false,
             "green": true,
             "orange": false,
@@ -74,12 +74,12 @@
         }
     },
     "cosmetics": {
-        "viking_helmet": false,
+        "viking_helmet": true,
         "duck": false,
         "banana": false,
         "surfinbird": false
     },
     "gamemodes": {
-        "drift": false
+        "drift": true
     }
 }

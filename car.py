@@ -55,8 +55,14 @@ class Car(Entity):
         self.pivot.rotation = self.rotation
         self.drifting = False
 
+        # Car sensors
+        self.show_sensors = True
+        self.sensor_rays = []
+        self.sensor_length = 100
+
         # Car Type
         self.car_type = "sports"
+        self.print_timer = 0
 
         # Particles
         self.particle_time = 0
@@ -76,7 +82,7 @@ class Car(Entity):
         self.start_trail = True
 
         # Audio
-        self.audio = True
+        self.audio = False
         self.volume = 1
         self.start_sound = True
         self.start_fall = True
@@ -162,6 +168,13 @@ class Car(Entity):
         # Reinforcement learning
         self.rl = False
         self.ai_cars = []
+
+        # Show sensors
+        if self.show_sensors and self.gamemode == "race":
+            for _ in range(5):
+                ray = Entity(model='cube', scale=(0.1, 0.1, self.sensor_length), color=color.green)
+                ray.disable()
+                self.sensor_rays.append(ray)
 
         # Shows whether you are connected to a server or not
         self.connected_text = True
@@ -341,10 +354,89 @@ class Car(Entity):
         for cosmetic in self.cosmetics:
             cosmetic.y = 0.3
 
+    def get_sensor_distances(self):
+        """Returns distances from sensors in all directions"""
+        directions = [
+            (0, 0, 1),      # Forward
+            (0.7, 0, 0.7),  # Forward Right
+            (1, 0, 0),      # Right
+            (-1, 0, 0),     # Left
+            (-0.7, 0, 0.7), # Forward Left
+        ]
+        
+        distances = []
+        
+        for i, direction in enumerate(directions):
+            # Rotate direction based on car's rotation
+            rotated_direction = self.forward * direction[2] + self.right * direction[0]
+            
+            # Cast ray
+            ray = raycast(
+                origin=self.world_position,
+                direction=rotated_direction,
+                distance=self.sensor_length,
+                ignore=[self]
+            )
+            
+            # Get distance or max length if no hit
+            distance = ray.distance if ray.hit else self.sensor_length
+            distances.append(distance)
+            
+            # Update sensor visualization
+            if self.show_sensors and i < len(self.sensor_rays):
+                ray_entity = self.sensor_rays[i]
+                # Position the ray to start from car's position
+                ray_entity.world_position = self.world_position
+                ray_entity.look_at(self.world_position + rotated_direction * distance)
+                ray_entity.world_position += rotated_direction * (distance/2)
+                ray_entity.scale_z = distance
+                ray_entity.enable()
+
+        car_state = {
+            'speed': self.speed,
+            'inputs': {
+                'forward': held_keys[self.controls[0]] or held_keys['up arrow'],
+                'left': held_keys[self.controls[1]] or held_keys['left arrow'],
+                'backward': held_keys[self.controls[2]] or held_keys['down arrow'],
+                'right': held_keys[self.controls[3]] or held_keys['right arrow'],
+                'handbrake': held_keys['space']
+            }
+        }
+
+        #print("Car state:", car_state)
+        
+        return car_state, distances
+    
+    def calculate_reward(self):
+        reward = 0
+        
+        # Get checkpoint data from current track
+        if hasattr(self, 'current_track'):
+            checkpoint_data = self.current_track.get_checkpoint_data()
+            next_checkpoint = checkpoint_data['positions'][self.current_checkpoint]
+            
+            # Calculate distance to next checkpoint
+            distance = (self.position - next_checkpoint).length()
+            if distance < self.last_distance:
+                reward += 0.1
+            
+            # Big reward for hitting checkpoint
+            if checkpoint_data['status'][self.current_checkpoint]:
+                reward += 10.0
+                self.current_checkpoint = (self.current_checkpoint + 1) % checkpoint_data['total']
+            
+            self.last_distance = distance
+        
+        return reward
+
     def update(self):
         # Stopwatch/Timer
         # Race Gamemode
         if self.gamemode == "race":
+            self.print_timer += time.dt  # Add elapsed time
+            if self.print_timer >= 5:
+                self.print_timer = 0
+            self.get_sensor_distances()
             self.highscore.text = str(round(self.highscore_count, 1))
             self.laps_text.disable()
             if self.timer_running:
