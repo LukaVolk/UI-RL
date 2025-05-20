@@ -7,7 +7,7 @@ sign = lambda x: -1 if x < 0 else (1 if x > 0 else 0)
 Text.default_resolution = 1080 * Text.size
 
 class CarRL(Entity):
-    def __init__(self, car, grass_track, sand_track, snow_track, forest_track, savannah_track, lake_track, position = (0, 0, 4), rotation = (0, 0, 0), topspeed = 30, acceleration = 0.35, braking_strength = 30, friction = 0.6, drift_speed = 35, camera_speed = 8):
+    def __init__(self, position = (0, 0, 4), rotation = (0, 0, 0), topspeed = 30, acceleration = 0.35, braking_strength = 30, friction = 0.6, drift_speed = 35, camera_speed = 8):
         super().__init__(
             model = "sports-car.obj",
             texture = "sports-red.png",
@@ -16,24 +16,13 @@ class CarRL(Entity):
             rotation = rotation,
         )
 
+        self.grass_track_rl = True
+
         # Rotation parent
         self.rotation_parent = Entity()
 
         # Controls
         self.controls = "wasd"
-        self.car = car
-        #tracks
-        # Makes the track accessible
-        self.grass_track = grass_track
-        self.sand_track = sand_track
-        self.snow_track = snow_track
-        self.forest_track = forest_track
-        self.savannah_track = savannah_track
-        self.lake_track = lake_track
-
-        self.current_track = self.grass_track
-
-        self.tracks = [self.grass_track, self.sand_track, self.snow_track, self.forest_track, self.savannah_track, self.lake_track]
 
         #camera
         # Camera Follow
@@ -798,19 +787,19 @@ class CarRL(Entity):
                     self.highscore_count = self.last_count
                     self.animate_text(self.highscore)
 
-            if self.sand_track.enabled:
-                self.sand_track_hs = float(self.highscore_count)
-            elif self.grass_track.enabled:
-                self.grass_track_hs = float(self.highscore_count)
-            elif self.snow_track.enabled:
-                self.snow_track_hs = float(self.highscore_count)
-            elif self.forest_track.enabled:
-                self.forest_track_hs = float(self.highscore_count)
-            elif self.savannah_track.enabled:
-                self.savannah_track_hs = float(self.highscore_count)
-            elif self.lake_track.enabled:
-                self.lake_track_hs = float(self.highscore_count)
-            self.save_highscore()
+            #if self.sand_track.enabled:
+            #    self.sand_track_hs = float(self.highscore_count)
+            #elif self.grass_track.enabled:
+            #    self.grass_track_hs = float(self.highscore_count)
+            #elif self.snow_track.enabled:
+            #    self.snow_track_hs = float(self.highscore_count)
+            #elif self.forest_track.enabled:
+            #    self.forest_track_hs = float(self.highscore_count)
+            #elif self.savannah_track.enabled:
+            #    self.savannah_track_hs = float(self.highscore_count)
+            #elif self.lake_track.enabled:
+            #    self.lake_track_hs = float(self.highscore_count)
+            #self.save_highscore()
 
         elif self.gamemode == "time trial":
             self.last_count = self.count
@@ -837,18 +826,18 @@ class CarRL(Entity):
             
             self.highscore.text = str(int(self.highscore_count))
             
-            if self.sand_track.enabled:
-                self.sand_track_drift = int(self.highscore_count)
-            elif self.grass_track.enabled:
-                self.grass_track_drift = int(self.highscore_count)
-            elif self.snow_track.enabled:
-                self.snow_track_drift = int(self.highscore_count)
-            elif self.forest_track.enabled:
-                self.forest_track_drift = int(self.highscore_count)
-            elif self.savannah_track.enabled:
-                self.savannah_track_drift = int(self.highscore_count)
-            elif self.lake_track.enabled:
-                self.lake_track_drift = int(self.highscore_count)
+            #if self.sand_track.enabled:
+            #    self.sand_track_drift = int(self.highscore_count)
+            #elif self.grass_track.enabled:
+            #    self.grass_track_drift = int(self.highscore_count)
+            #elif self.snow_track.enabled:
+            #    self.snow_track_drift = int(self.highscore_count)
+            #elif self.forest_track.enabled:
+            #    self.forest_track_drift = int(self.highscore_count)
+            #elif self.savannah_track.enabled:
+            #    self.savannah_track_drift = int(self.highscore_count)
+            #elif self.lake_track.enabled:
+            #    self.lake_track_drift = int(self.highscore_count)
 
             self.save_highscore()
 
@@ -920,7 +909,7 @@ class CarRL(Entity):
         Declares variables with data from a json file
         """
 
-        self.grass_track.unlocked = True
+       #self.grass_track_rl.unlocked = True
 
         self.beat_mandaw_sand_track = self.unlocked["beat_mandaw"]["sand_track"]
         self.beat_mandaw_grass_track = self.unlocked["beat_mandaw"]["grass_track"]

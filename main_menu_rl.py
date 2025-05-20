@@ -10,12 +10,13 @@ from tracks.snow_track import SnowTrack
 from tracks.forest_track import ForestTrack
 from tracks.savannah_track import SavannahTrack
 from tracks.lake_track import LakeTrack
+from tracks.grass_track_rl import GrassTrackRL
 
 
 Text.default_resolution = 1080 * Text.size
 
 class MainMenuRL(Entity):
-    def __init__(self, car, ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track, cars):
+    def __init__(self, grass_track_rl, cars):
         super().__init__(
             parent = camera.ui
         )
@@ -49,20 +50,14 @@ class MainMenuRL(Entity):
         #RL cars
         self.cars = cars
 
-        self.car = car
-        self.sand_track = sand_track
-        self.grass_track = grass_track
-        self.snow_track = snow_track
-        self.forest_track = forest_track
-        self.savannah_track = savannah_track
-        self.lake_track = lake_track
-        self.ai_list = ai_list
         self.sun = None
 
         self.click = Audio("click.wav", False, False, volume = 10)
 
+        self.grass_track_rl = grass_track_rl
+
         self.tracks = [
-            self.sand_track, self.grass_track, self.snow_track, self.forest_track, self.savannah_track, self.lake_track
+            self.grass_track_rl
         ]
 
         # Animate the menu
@@ -84,63 +79,19 @@ class MainMenuRL(Entity):
 
         # Start Menu
 
-        self.car.position = (-80, -42, 18.8)
-        self.car.visible = True
-        self.grass_track.enable()
-        for track in self.grass_track.track:
+        self.cars[0].position = (-80, -42, 18.8)
+        self.cars[0].visible = True
+        self.grass_track_rl.enable()
+        for track in self.grass_track_rl.track:
             track.enable()
-        for detail in self.grass_track.details:
+        for detail in self.grass_track_rl.details:
             detail.enable()
-
-        def singleplayer():
-            car.multiplayer = False
-            self.start_menu.disable()
-            self.main_menu.enable()
-            grass_track.enable()
-            self.car.position = (0, 0, 4)
-            self.car.visible = False
-            for track in self.tracks:
-                for i in track.track:
-                    i.disable()
-                for i in track.details:
-                    i.disable()
-            for track in self.grass_track.track:
-                track.enable()
-            if self.car.graphics != "ultra fast":
-                for detail in self.grass_track.details:
-                    detail.enable()
-            if self.car.graphics == "fast":
-                self.grass_track.grass.disable()
-
-        def multiplayer():
-            self.start_menu.disable()
-            self.host_menu.enable()
-            self.car.visible = True
-            self.car.position = (-3, -44.5, 92)
-            grass_track.disable()
-            snow_track.enable()
-            for track in self.tracks:
-                for i in track.track:
-                    i.disable()
-                for i in track.details:
-                    i.disable()
-            for track in self.snow_track.track:
-                track.enable()
-            if self.car.graphics != "ultra fast":
-                self.snow_track.trees.enable()
 
         def quit():
             application.quit()
             os._exit(0)
 
         start_title = Entity(model = "quad", scale = (0.5, 0.2, 0.2), texture = "rally-logo", parent = self.start_menu, y = 0.3)
-
-        singleplayer_button = Button(text = "Singleplayer", color = color.gray, highlight_color = color.light_gray, scale_y = 0.1, scale_x = 0.3, y = 0.05, parent = self.start_menu)
-        multiplayer_button = Button(text = "Multiplayer", color = color.gray, highlight_color = color.light_gray, scale_y = 0.1, scale_x = 0.3, y = -0.08, parent = self.start_menu)
-    
-        singleplayer_button.on_click = Func(singleplayer)
-        multiplayer_button.on_click = Func(multiplayer)
-        
 
         # Quit Menu
 
@@ -159,297 +110,6 @@ class MainMenuRL(Entity):
         quit_yes.on_click = Func(quit)
         quit_no.on_click = Func(dont_quit)
 
-        # Host Server Menu
-
-        def create_server():
-            if str(self.car.host_ip.text) != "IP" and str(self.car.host_port) != "PORT":
-                self.car.server = Server(car.host_ip, car.host_port)
-                self.car.server_running = True
-                self.car.server.start_server = True
-                self.host_menu.disable()
-                self.created_server_menu.enable()
-                self.car.visible = True
-                self.car.position = (-63, -40, -7)
-                self.car.rotation = (0, 90, 0)
-                snow_track.disable()
-                sand_track.enable()
-                back_button_server.disable()
-                for track in self.tracks:
-                    for i in track.track:
-                        i.disable()
-                    for i in track.details:
-                        i.disable()
-                for track in self.sand_track.track:
-                    track.enable()
-                if self.car.graphics != "ultra fast":
-                    for detail in self.sand_track.details:
-                        detail.enable()
-
-        def join_server_func():
-            self.host_menu.disable()
-            self.server_menu.enable()
-            self.car.visible = True
-            self.car.position = (-105, -50, -59)
-            snow_track.disable()
-            sand_track.enable()
-            for track in self.tracks:
-                for i in track.track:
-                    i.disable()
-                for i in track.details:
-                    i.disable()
-            for track in self.sand_track.track:
-                track.enable()
-            if self.car.graphics != "ultra fast":
-                for detail in self.sand_track.details:
-                    detail.enable()
-
-        def back_host():
-            self.host_menu.disable()
-            self.start_menu.enable()
-            self.car.position = (-80, -42, 18.8)
-            self.car.rotation = (0, 90, 0)
-            self.car.visible = True
-            self.grass_track.enable()
-            self.snow_track.disable()
-            for track in self.tracks:
-                for i in track.track:
-                    i.disable()
-                for i in track.details:
-                    i.disable()
-            for track in self.grass_track.track:
-                track.enable()
-            if self.car.graphics != "ultra fast":
-                for detail in self.grass_track.details:
-                    detail.enable()
-            if self.car.graphics == "fast":
-                self.grass_track.grass.disable()
-        
-        self.car.host_ip = InputField(default_value = "IP", limit_content_to = "0123456789.localhost", color = color.black, alpha = 100, y = 0.1, parent = self.host_menu)
-        self.car.host_port = InputField(default_value = "PORT", limit_content_to = "0123456789", color = color.black, alpha = 100, y = 0.02, parent = self.host_menu)
-
-        create_server_button = Button(text = "Create Server", color = color.hex("F58300"), highlight_color = color.gray, scale_y = 0.1, scale_x = 0.3, y = -0.1, parent = self.host_menu)
-        join_server_button = Button(text = "Join Server", color = color.hex("0097F5"), highlight_color = color.gray, scale_y = 0.1, scale_x = 0.3, y = -0.22, parent = self.host_menu)
-        back_button_host = Button(text = "<- Back", color = color.gray, scale_y = 0.05, scale_x = 0.2, y = 0.45, x = -0.65, parent = self.host_menu)
-
-        create_server_button.on_click = Func(create_server)
-        join_server_button.on_click = Func(join_server_func)
-        back_button_host.on_click = Func(back_host)
-
-        # Created Server
-
-        def join_hosted_server_func():
-            car.ip.text = car.host_ip.text
-            car.port.text = car.host_port.text
-            car.multiplayer = True
-            self.created_server_menu.disable()
-            self.main_menu.enable()
-            self.car.position = (0, 0, 4)
-            self.car.camera_offset = (20, 40, -50)
-            camera.rotation = (35, -20, 0)
-            self.car.visible = False
-            self.sand_track.disable()
-            self.grass_track.enable()
-            for track in self.tracks:
-                for i in track.track:
-                    i.disable()
-                for i in track.details:
-                    i.disable()
-            for track in self.grass_track.track:
-                track.enable()
-            if self.car.graphics != "ultra fast":
-                for detail in self.grass_track.details:
-                    detail.enable()
-            if self.car.graphics == "fast":
-                self.grass_track.grass.disable()
-
-        def stop_server():
-            application.quit()
-            os._exit(0)
-
-        self.username_created_server = InputField(default_value = car.username_text, color = color.black, alpha = 100, y = 0.05, parent = self.created_server_menu)
-        join_hosted_server = Button(text = "Join Server", color = color.hex("F58300"), highlight_color = color.gray, scale_y = 0.1, scale_x = 0.3, y = -0.1, parent = self.created_server_menu)
-        running = Text(text = "Running server...", scale = 1.5, line_height = 2, x = 0, origin = 0, y = 0.2, parent = self.created_server_menu)
-        stop_button = Button(text = "Stop", color = color.hex("D22828"), scale_y = 0.1, scale_x = 0.3, y = -0.22, parent = self.created_server_menu)
-
-        join_hosted_server.on_click = Func(join_hosted_server_func)
-        stop_button.on_click = Func(stop_server)
-
-        # Server Menu
-
-        def join_server():
-            if str(self.car.ip.text) != "IP" and str(self.car.port.text) != "PORT":
-                car.multiplayer = True
-                self.server_menu.disable()
-                self.main_menu.enable()
-                grass_track.enable()
-                sand_track.disable()
-                self.car.position = (0, 0, 4)
-                self.car.camera_offset = (20, 40, -50)
-                camera.rotation = (35, -20, 0)
-                self.car.visible = False
-                self.car.connected = False
-                for track in self.tracks:
-                    for i in track.track:
-                        i.disable()
-                    for i in track.details:
-                        i.disable()
-                for track in self.grass_track.track:
-                    track.enable()
-                if self.car.graphics != "ultra fast":
-                    for detail in self.grass_track.details:
-                        detail.enable()
-                if self.car.graphics == "fast":
-                    self.grass_track.grass.disable()
-
-        def back_server():
-            self.host_menu.enable()
-            self.server_menu.disable()
-            self.car.visible = True
-            self.car.position = (-3, -44.5, 92)
-            sand_track.disable()
-            snow_track.enable()
-            for track in self.tracks:
-                for i in track.track:
-                    i.disable()
-                for i in track.details:
-                    i.disable()
-            for track in self.snow_track.track:
-                track.enable()
-            if self.car.graphics != "ultra fast":
-                for detail in self.snow_track.details:
-                    detail.enable()
-
-        car.username = InputField(default_value = car.username_text, color = color.black, alpha = 100, y = 0.18, parent = self.server_menu)
-        car.ip = InputField(default_value = "IP", limit_content_to = "0123456789.localhost", color = color.black, alpha = 100, y = 0.1, parent = self.server_menu)
-        car.port = InputField(default_value = "PORT", limit_content_to = "0123456789", color = color.black, alpha = 100, y = 0.02, parent = self.server_menu)
-        join_button = Button(text = "Join Server", color = color.hex("F58300"), highlight_color = color.gray, scale_y = 0.1, scale_x = 0.3, y = -0.1, parent = self.server_menu)
-        back_button_server = Button(text = "<- Back", color = color.gray, scale_y = 0.05, scale_x = 0.2, y = 0.45, x = -0.65, parent = self.server_menu)
-
-        join_button.on_click = Func(join_server)
-        back_button_server.on_click = Func(back_server)
-
-        # Main Menu
-
-        def back_singleplayer():
-            self.car.position = (-80, -42, 18.8)
-            self.car.rotation = (0, 90, 0)
-            self.car.visible = True
-            self.grass_track.enable()
-            self.start_menu.enable()
-            self.main_menu.disable()
-            if self.car.multiplayer_update:
-                self.car.multiplayer_update = False
-            for track in self.tracks:
-                for i in track.track:
-                    i.disable()
-                for i in track.details:
-                    i.disable()
-            for track in self.grass_track.track:
-                track.enable()
-            if self.car.graphics != "ultra fast":
-                for detail in self.grass_track.details:
-                    detail.enable()
-            if self.car.graphics == "fast":
-                self.grass_track.grass.disable()
-
-        title = Entity(model = "quad", scale = (0.5, 0.2, 0.2), texture = "rally-logo", parent = self.main_menu, y = 0.3)
-
-        back_button_singleplayer = Button(text = "Back", color = color.black, scale_y = 0.1, scale_x = 0.3, y = -0.34, parent = self.main_menu)
-        back_button_singleplayer.on_click = Func(back_singleplayer)
-
-        # Maps Menu
-
-        def start():
-            self.main_menu.disable()
-            if self.car.multiplayer_update:
-                ai_button.disable()
-                self.ai_slider.disable()
-                self.maps_menu.enable()
-            else:
-                self.race_menu.enable()
-
-        def back():
-            self.maps_menu.disable()
-            if self.car.multiplayer_update:
-                self.main_menu.enable()
-            else:
-                self.race_menu.enable()
-                
-            self.car.position = (0, 0, 4)
-            unlocked_text.disable()
-            for track in self.tracks:
-                track.alpha = 255
-                track.disable()
-                for i in track.track:
-                    i.disable()
-                for i in track.details:
-                    i.disable()
-            for track in self.grass_track.track:
-                track.enable()
-            if self.car.graphics != "ultra fast":
-                for detail in self.grass_track.details:
-                    detail.enable()
-            if self.car.graphics == "fast":
-                self.grass_track.grass.disable()
-            grass_track.enable()
-
-        def ai_func():
-            self.car.ai = not self.car.ai
-            if self.car.ai:
-                ai_button.text = "AI: On"
-                self.ai_slider.enable()
-            elif self.car.ai == False:
-                ai_button.text = "AI: Off"
-                self.ai_slider.disable()
-
-        def sand_track_func():
-            if sand_track.unlocked:
-                self.car.visible = True
-                mouse.locked = True
-                self.maps_menu.disable()
-                self.car.position = (-63, -30, -7)
-                self.car.rotation = (0, 90, 0)
-                self.car.reset_count_timer.enable()
-                        
-                for track in self.tracks:
-                    track.disable()
-                    for i in track.track:
-                        i.disable()
-                    for i in track.details:
-                        i.disable()
-
-                sand_track.enable()
-                sand_track.played = True
-
-                for s in sand_track.track:
-                    s.enable()
-                    s.alpha = 255
-                if self.car.graphics != "ultra fast":
-                    for detail in sand_track.details:
-                        detail.enable()
-                        detail.alpha = 255
-
-                if self.car.multiplayer_update == False and self.car.ai:
-                    for ai in ai_list:
-                        if ai.set_enabled:
-                            ai.enable()
-                        ai.position = (-63, -40, -7) + (random.randint(-2, 2), random.randint(-2, 2), random.randint(-2, 2))
-                        ai.rotation = (0, 65, 0)
-                        ai.set_random_car()
-                        ai.set_random_texture()
-                        ai.next_path = ai.sap1
-                        ai.check_track()
-
-                if self.car.gamemode == "race":
-                    self.car.highscore_count = float(self.car.sand_track_hs)
-                elif self.car.gamemode == "time trial":
-                    self.car.highscore_count = float(self.car.sand_track_laps)
-                elif self.car.gamemode == "drift":
-                    self.car.drift_time = 25
-                    self.car.highscore_count = float(self.car.sand_track_drift)
-                    self.car.highscore.text = str(int(self.car.highscore_count))
-            else:
-                unlocked_text.shake()
 
         def grass_track_func():
             if grass_track.unlocked:
@@ -889,73 +549,70 @@ class MainMenuRL(Entity):
 
         def grass_track_func_ai():
             print("reinforcement learning")
-            if grass_track.unlocked:
-                self.start_menu.disable()
-                for track in self.tracks:
-                        track.disable()
-                        for i in track.track:
-                            i.disable()
-                        for i in track.details:
-                            i.disable()
 
-                grass_track.enable()
-                mouse.locked = True
-                #set camera
-                camera.rotation = (0, 0, 0)
-                camera.position = (-80, -30, 18.5)
-                self.car.camera_follow = False
-                learn = None
-                #self.car.position = (-80, -30, 18.5)
-                #self.car.rotation = (0, 90, 0)
-                #self.car.reset_count_timer.enable()
-                self.car.visible = False
-                self.car.collision = False
-                cars = []
+            self.start_menu.disable()
+            for track in self.tracks:
+                    track.disable()
+                    for i in track.track:
+                        i.disable()
+                    for i in track.details:
+                        i.disable()
+            grass_track_rl.enable()
+            mouse.locked = True
+            #set camera
+            camera.rotation = (0, 0, 0)
+            camera.position = (-80, -30, 18.5)
+            self.car.camera_follow = False
+            learn = None
+            #self.car.position = (-80, -30, 18.5)
+            #self.car.rotation = (0, 90, 0)
+            #self.car.reset_count_timer.enable()
+            self.car.visible = False
+            self.car.collision = False
+            cars = []
+            
+            for i, rl_car in enumerate(self.cars):
                 
-                for i, rl_car in enumerate(self.cars):
-                    
-                    rl_car.position = (-80, -30, 18.5)
-                    rl_car.rotation = (0, 90, 0)
-                    rl_car.visible = True
-                    rl_car.collision = False 
-                    rl_car.camera_follow = False         
-                    cars.append(rl_car)
-                
-                for rl_car in cars:
-                    rl_car.update()
-                self.car.update()
-                #for _ in range(100):
-                #    if learn is not None:
-                #        cars = learn.cars
-                #        for car in cars:
-                #            car.position = (-80, -30, 18.5) + (random.randint(-2, 2), random.randint(-2, 2), random.randint(-2, 2))
-                #            car.rotation = (0, 90, 0)
-                #            car.visible = True
-                #    else:
-                #        cars = []
-                #        for rl_car in range(10):
-                #            car = Car()
-                #            car.position = (-80, -30, 18.5) + (random.randint(-2, 2), random.randint(-2, 2), random.randint(-2, 2))
-                #            car.rotation = (0, 90, 0)
-                #            car.visible = True
-                #            cars.append(car)
-                #    
-                #    time.sleep(10)
-                #
-                #    rl = ReinforcementLearning(cars, grass_track)
-                #    learn = rl.start()
-
-                grass_track.played = True
-
-                for g in grass_track.track:
-                    g.enable()
-                    g.alpha = 255
-                if self.car.graphics != "ultra fast":
-                    for detail in grass_track.details:
-                        detail.enable()
-                        detail.alpha = 255
-                if self.car.graphics == "fast":
-                    grass_track.grass.disable()
+                rl_car.position = (-80, -30, 18.5)
+                rl_car.rotation = (0, 90, 0)
+                rl_car.visible = True
+                rl_car.collision = False 
+                rl_car.camera_follow = False         
+                cars.append(rl_car)
+            
+            for rl_car in cars:
+                rl_car.update()
+            self.car.update()
+            #for _ in range(100):
+            #    if learn is not None:
+            #        cars = learn.cars
+            #        for car in cars:
+            #            car.position = (-80, -30, 18.5) + (random.randint(-2, 2), random.randint(-2, 2), random.randint(-2, 2))
+            #            car.rotation = (0, 90, 0)
+            #            car.visible = True
+            #    else:
+            #        cars = []
+            #        for rl_car in range(10):
+            #            car = Car()
+            #            car.position = (-80, -30, 18.5) + (random.randint(-2, 2), random.randint(-2, 2), random.randint(-2, 2))
+            #            car.rotation = (0, 90, 0)
+            #            car.visible = True
+            #            cars.append(car)
+            #    
+            #    time.sleep(10)
+            #
+            #    rl = ReinforcementLearning(cars, grass_track)
+            #    learn = rl.start()
+            grass_track_rl.played = True
+            for g in grass_track_rl.track:
+                g.enable()
+                g.alpha = 255
+            if self.car.graphics != "ultra fast":
+                for detail in grass_track_rl.details:
+                    detail.enable()
+                    detail.alpha = 255
+            if self.car.graphics == "fast":
+                grass_track_rl.grass.disable()
             
             else:
                 unlocked_text.shake()
@@ -994,22 +651,6 @@ class MainMenuRL(Entity):
         self.leaderboard_background.disable()
         self.leaderboard_title.disable()
 
-        sand_track_button.on_mouse_enter = Func(sand_track_hover)
-        grass_track_button.on_mouse_enter = Func(grass_track_hover)
-        snow_track_button.on_mouse_enter = Func(snow_track_hover)
-        forest_track_button.on_mouse_enter = Func(forest_track_hover)
-        savannah_track_button.on_mouse_enter = Func(savannah_track_hover)
-        lake_track_button.on_mouse_enter = Func(lake_track_hover)
-
-        start_button.on_click = Func(start)
-        sand_track_button.on_click = Func(sand_track_func)
-        grass_track_button.on_click = Func(grass_track_func)
-        snow_track_button.on_click = Func(snow_track_func)
-        forest_track_button.on_click = Func(forest_track_func)
-        savannah_track_button.on_click = Func(savannah_track_func)
-        lake_track_button.on_click = Func(lake_track_func)
-        ai_button.on_click = Func(ai_func)
-        back_button.on_click = Func(back)
 
         #Reinforcement Learning Menu
         reinforcment_learning_button = Button(text = "Reinforcement Learning", color = color.gray, highlight_color = color.light_gray, scale_y = 0.1, scale_x = 0.3, y = -0.21, parent = self.start_menu)
@@ -1110,76 +751,7 @@ class MainMenuRL(Entity):
         controls_button.on_click = Func(controls)
         back_button_settings.on_click = Func(back_settings)
 
-        # Gameplay Menu
 
-        def graphics():
-            if self.car.graphics == "fancy":
-                self.car.graphics = "fast"
-                self.car.particle_amount = 0.085
-                graphics_button.text = "Graphics: Fast"
-                for track in self.tracks:
-                    if track.enabled:
-                        for detail in track.details:
-                            detail.enable()
-                        grass_track.grass.disable()
-                self.sun.resolution = 2048
-            elif self.car.graphics == "fast":
-                self.car.graphics = "ultra fast"
-                self.car.particle_amount = 0.1
-                graphics_button.text = "Graphics: Ultra Fast"
-                for track in self.tracks:
-                    if track.enabled:
-                        for detail in track.details:
-                            detail.disable()
-                self.sun.resolution = 1024
-            elif self.car.graphics == "ultra fast":
-                self.car.graphics = "fancy"
-                self.car.particle_amount = 0.07
-                graphics_button.text = "Graphics: Fancy"
-                for track in self.tracks:
-                    if track.enabled:
-                        for detail in track.details:
-                            detail.enable()
-                self.sun.resolution = 3072
-            self.sun.update_resolution()
-
-        def camera_angle():
-            if self.car.camera_angle == "top":
-                self.car.camera_angle = "side"
-                camera_angle_button.text = "Camera Angle: Side"
-            elif self.car.camera_angle == "side":
-                self.car.camera_angle = "behind"
-                camera_angle_button.text = "Camera Angle: Behind"
-            elif self.car.camera_angle == "behind":
-                self.car.camera_angle = "first-person"
-                camera_angle_button.text = "Camera Angle: First-Person"
-            elif self.car.camera_angle == "first-person":
-                self.car.camera_angle = "top"
-                camera_angle_button.text = "Camera Angle: Top"
-            self.car.change_camera = True
-
-        def camera_shake():
-            self.car.camera_shake_option = not self.car.camera_shake_option
-            if self.car.camera_shake_option:
-                camera_shake_button.text = "Camera Shake: On"
-            elif self.car.camera_shake_option == False:
-                camera_shake_button.text = "Camera Shake: Off"
-
-        def back_gameplay():
-            self.gameplay_menu.disable()
-            self.settings_menu.enable()
-
-        graphics_button = Button("Graphics: Fancy", color = color.black, scale_y = 0.1, scale_x = 0.3, y = 0.24, parent = self.gameplay_menu)
-        camera_angle_button = Button("Camera Angle: Top", color = color.black, scale_y = 0.1, scale_x = 0.3, y = 0.12, parent = self.gameplay_menu)
-        camera_shake_button = Button("Camera Shake: On", color = color.black, scale_y = 0.1, scale_x = 0.3, y = 0, parent = self.gameplay_menu)
-        reset_highsore_button = Button(text = "Reset Highscore", color = color.black, scale_y = 0.1, scale_x = 0.3, y = -0.12, parent = self.gameplay_menu)
-        back_button_gameplay = Button(text = "Back", color = color.black, scale_y = 0.1, scale_x = 0.3, y = -0.24, parent = self.gameplay_menu)
-
-        graphics_button.on_click = Func(graphics)
-        camera_angle_button.on_click = Func(camera_angle)
-        camera_shake_button.on_click = Func(camera_shake)
-        reset_highsore_button.on_click = Func(self.car.reset_highscore)
-        back_button_gameplay.on_click = Func(back_gameplay)
 
         # Video Menu
 

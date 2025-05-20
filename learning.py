@@ -10,6 +10,7 @@ from sun import SunLight
 
 from tracks.sand_track import SandTrack
 from tracks.grass_track import GrassTrack
+from tracks.grass_track_rl import GrassTrackRL
 from tracks.snow_track import SnowTrack
 from tracks.forest_track import ForestTrack
 from tracks.savannah_track import SavannahTrack
@@ -99,34 +100,16 @@ try:
 except Exception as e:
     print("error starting thread", e)
 
-# Car
-car = CarRL()
-car.sports_car()
 
-# Tracks
-sand_track = SandTrack(car)
-grass_track = GrassTrack(car)
-snow_track = SnowTrack(car)
-forest_track = ForestTrack(car)
-savannah_track = SavannahTrack(car)
-lake_track = LakeTrack(car)
-
-car.sand_track = sand_track
-car.grass_track = grass_track
-car.snow_track = snow_track
-car.forest_track = forest_track
-car.savannah_track = savannah_track
-car.lake_track = lake_track
-
-cars = [CarRL(car, grass_track, sand_track, snow_track, forest_track, savannah_track, lake_track) for _ in range(10)]
+cars = [CarRL() for _ in range(10)]
 for car_i in cars:
     car_i.visible = False
 
-# AI
-ai_list = []
+grass_track_rl = GrassTrackRL(cars)
 
+ai_list = []
 # Main menu
-main_menu = MainMenuRL(cars[0], ai_list, sand_track, grass_track, snow_track, forest_track, savannah_track, lake_track, cars)
+main_menu = MainMenuRL(grass_track_rl, cars)
 
 # Lighting + shadows
 sun = SunLight(direction = (-0.7, -0.9, 0.5), resolution = 3072, car = car)

@@ -116,38 +116,40 @@ class GrassTrackRL(Entity):
         # if self.print_timer >= 5:
         #     print(self.car.position)
         #     self.print_timer = 0
-        if self.car.simple_intersects(self.finish_line):
-            if self.car.anti_cheat == 1:
-                self.car.timer_running = True
-                self.car.anti_cheat = 0
-                if self.car.gamemode != "drift":
-                    invoke(self.car.reset_timer, delay = 3)
+        
+        for car in self.cars:
+            if car.simple_intersects(self.finish_line):
+                if car.anti_cheat == 1:
+                    car.timer_running = True
+                    car.anti_cheat = 0
+                    if car.gamemode != "drift":
+                        invoke(car.reset_timer, delay = 3)
 
-                self.car.check_highscore()
-                self.car_checkpoints[self.car] = [False] * len(self.checkpoints)
+                    car.check_highscore()
+                    self.car_checkpoints[car] = [False] * len(self.checkpoints)
 
-            self.wall1.enable()
-            self.wall2.enable()
-            self.wall3.disable()
-            self.wall4.disable()
+                self.wall1.enable()
+                self.wall2.enable()
+                self.wall3.disable()
+                self.wall4.disable()
 
-        if self.car.simple_intersects(self.wall_trigger):
-            self.wall1.disable()
-            self.wall2.disable()
-            self.wall3.enable()
-            self.wall4.enable()
-            self.car.anti_cheat = 0.5
+            if car.simple_intersects(self.wall_trigger):
+                self.wall1.disable()
+                self.wall2.disable()
+                self.wall3.enable()
+                self.wall4.enable()
+                self.car.anti_cheat = 0.5
 
-        if self.car.simple_intersects(self.wall_trigger_ramp):
-            if self.car.anti_cheat == 0.5:
-                self.car.anti_cheat = 1
+            if car.simple_intersects(self.wall_trigger_ramp):
+                if car.anti_cheat == 0.5:
+                    car.anti_cheat = 1
 
-        for i, cp in enumerate(self.checkpoints):
-            if self.car.simple_intersects(cp) and not self.car_checkpoints[self.car][i]:
-                # Checkpoint passed
-                self.car_checkpoints[self.car][i] = True
-                print(f"Checkpoint {i} passed! Status: {self.car_checkpoints[self.car]}")
+            for i, cp in enumerate(self.checkpoints):
+                if car.simple_intersects(cp) and not self.car_checkpoints[car][i]:
+                    # Checkpoint passed
+                    self.car_checkpoints[car][i] = True
+                    print(f"Checkpoint {i} passed! Status: {self.car_checkpoints[car]}")
 
-                # Give bonus for reinforcement learning
-                # if hasattr(self.car, "give_bonus_reward"):
-                #     self.car.give_bonus_reward(i)
+                    # Give bonus for reinforcement learning
+                    # if hasattr(self.car, "give_bonus_reward"):
+                    #     self.car.give_bonus_reward(i)
