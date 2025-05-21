@@ -417,7 +417,7 @@ class CarRL(Entity):
                 ray_entity.scale_z = distance
                 ray_entity.enable()
         
-        return self.speed, distances
+        return distances
         
     def give_reward(self, reward):
         """Give reward to the car and update reward tracking
@@ -431,6 +431,31 @@ class CarRL(Entity):
         
         # Optional: Print reward for debugging
         print(f"Reward given: {reward:.1f} | Total: {self.total_reward:.1f}")
+
+    def get_state(self):
+        """Get current state for RL model
+        
+        Returns:
+            tuple: (speed, sensor_distances, total_reward, next_checkpoint_index, rotation_speed)
+        """
+        # Get normalized speed (-1 to 1)
+        normalized_speed = self.speed / self.topspeed
+        
+        # Get sensor distances
+        sensor_distances = self.get_sensor_distances()
+        
+        # Normalize distances to 0-1 range
+        normalized_distances = [d / self.sensor_length for d in sensor_distances]
+        
+        state = {
+            'speed': normalized_speed,
+            'distances': normalized_distances,
+            'total_reward': self.total_reward,
+            'next_checkpoint': self.next_checkpoint_index,
+            'rotation_speed': self.rotation_speed
+        }
+        
+        return state
 
     def update(self):
         # Stopwatch/Timer
@@ -852,24 +877,31 @@ class CarRL(Entity):
         """
         Resets the car
         """
-        if self.sand_track.enabled:
-            self.position = (-63, -40, -7)
-            self.rotation = (0, 90, 0)
-        elif self.grass_track.enabled:
+        if self.rl:
+            # For RL training, always use grass track position
             self.position = (-80, -30, 18.5)
             self.rotation = (0, 90, 0)
-        elif self.snow_track.enabled:
-            self.position = (-5, -35, 93)
+        else:
+            self.position = (-80, -30, 18.5)
             self.rotation = (0, 90, 0)
-        elif self.forest_track.enabled:
-            self.position = (12, -35, 76)
-            self.rotation = (0, 90, 0)
-        elif self.savannah_track.enabled:
-            self.position = (-14, -35, 42)
-            self.rotation = (0, 90, 0)
-        elif self.lake_track.enabled:
-            self.position = (-121, -40, 158)
-            self.rotation = (0, 90, 0)
+            # if self.sand_track.enabled:
+            #     self.position = (-63, -40, -7)
+            #     self.rotation = (0, 90, 0)
+            # elif self.grass_track.enabled:
+            #     self.position = (-80, -30, 18.5)
+            #     self.rotation = (0, 90, 0)
+            # elif self.snow_track.enabled:
+            #     self.position = (-5, -35, 93)
+            #     self.rotation = (0, 90, 0)
+            # elif self.forest_track.enabled:
+            #     self.position = (12, -35, 76)
+            #     self.rotation = (0, 90, 0)
+            # elif self.savannah_track.enabled:
+            #     self.position = (-14, -35, 42)
+            #     self.rotation = (0, 90, 0)
+            # elif self.lake_track.enabled:
+            #     self.position = (-121, -40, 158)
+            #     self.rotation = (0, 90, 0)
         self.speed = 0
         self.velocity_y = 0
         self.anti_cheat = 1

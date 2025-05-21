@@ -139,6 +139,12 @@ class MainMenuRL(Entity):
                 rl_car.collision = False 
                 rl_car.camera_follow = False         
                 cars.append(rl_car)
+                rl_car.speed = 0
+                rl_car.velocity_y = 0
+                rl_car.anti_cheat = 1
+                rl_car.timer_running = False
+                rl_car.count = 0.0
+                rl_car.reset_count = 0.0
             
             for rl_car in cars:
                 rl_car.update()
