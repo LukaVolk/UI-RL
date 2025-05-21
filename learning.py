@@ -8,6 +8,8 @@ from main_menu_rl import MainMenuRL
 from sun_rl import SunLightRL
 from tracks.grass_track_rl import GrassTrackRL
 
+from constants import CAR_INSTANCES
+
 Text.default_font = "./assets/Roboto.ttf"
 Text.default_resolution = 1080 * Text.size
 
@@ -93,7 +95,7 @@ except Exception as e:
     print("error starting thread", e)
 
 
-cars = [CarRL() for _ in range(10)]
+cars = [CarRL() for _ in range(CAR_INSTANCES)]
 for car_i in cars:
     car_i.visible = False
 

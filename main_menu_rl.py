@@ -71,7 +71,7 @@ class MainMenuRL(Entity):
         # Start Menu
 
         self.cars[0].position = (-80, -42, 18.8)
-        self.cars[0].visible = True
+        self.cars[0].visible = False
         self.grass_track_rl.enable()
         for track in self.grass_track_rl.track:
             track.enable()

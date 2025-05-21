@@ -1,4 +1,6 @@
 from ursina import *
+import random
+from constants import CHECKPOINT_REWARD, CHECKPOINT_WIDTH, FINISH_LINE_REWARD, MIN_SPEED_THRESHOLD, SHOW_CHECKPOINTS, SPEED_REWARD, TIME_PENALTY, WRONG_CHECKPOINT_PENALTY
 
 class GrassTrackRL(Entity):
     def __init__(self, cars):
@@ -13,7 +15,10 @@ class GrassTrackRL(Entity):
         )
 
         self.cars = cars if isinstance(cars, list) else [cars]
-        
+        self.car_action_timers = {car: 0.0 for car in self.cars}
+        self.car_seeds = {car: random.randint(1, 10000) for car in self.cars}
+
+        self.action_interval = 0.1
 
 
         self.print_timer = 0
@@ -39,31 +44,31 @@ class GrassTrackRL(Entity):
             Entity(
                 model="cube", 
                 position=(-31.180683, -34.7023, 18.503328), 
-                scale=(1, 8, 30), 
-                visible=True,
+                scale=(1, 8, CHECKPOINT_WIDTH), 
+                visible=SHOW_CHECKPOINTS,
                 collision=False  # Disable physical collision
             ),
             Entity(
                 model="cube", 
                 position=(42.992534, -42.648094, 18.128223), 
-                scale=(1, 8, 30), 
-                visible=True,
+                scale=(1, 8, CHECKPOINT_WIDTH), 
+                visible=SHOW_CHECKPOINTS,
                 collision=False,
                 rotation=(0, -45, 0)
             ),
             Entity(
                 model="cube", 
                 position=(41.169925, -42.723522, 61.554302), 
-                scale=(1, 8, 30), 
-                visible=True,
+                scale=(1, 8, CHECKPOINT_WIDTH), 
+                visible=SHOW_CHECKPOINTS,
                 collision=False,
                 rotation=(0, 45, 0)
             ),
             Entity(
                 model="cube", 
                 position=(-4.456625, -42.379024, -53.188812), 
-                scale=(1, 8, 30), 
-                visible=True,
+                scale=(1, 8, CHECKPOINT_WIDTH), 
+                visible=SHOW_CHECKPOINTS,
                 collision=False,
                 rotation=(0, -45, 0)
             ),
@@ -71,7 +76,7 @@ class GrassTrackRL(Entity):
                 model="cube", 
                 position=(-107.281555, -42.50573, -34.137355), 
                 scale=(1, 8, 30), 
-                visible=True,
+                visible=SHOW_CHECKPOINTS,
                 collision=False,
                 rotation=(0, 90, 0)
             )
@@ -99,15 +104,38 @@ class GrassTrackRL(Entity):
         self.played = False
         self.unlocked = False
 
-    # Add method to get checkpoint data
-    def get_checkpoint_data(self, car):
-        if car not in self.car_checkpoints:
-            raise ValueError(f"Car {car} not found in checkpoints.")
-        return {
-            'positions': [cp.position for cp in self.checkpoints],
-            'status': self.car_checkpoints[car],
-            'total': len(self.checkpoints)
-        }
+    def handle_checkpoint(self, car, checkpoint_index):
+        """Handle checkpoint collision with proper sequence validation
+        
+        Returns:
+            True: Correct checkpoint hit
+            False: Wrong checkpoint hit
+            None: Previous checkpoint hit - no action needed
+        """
+        if not self.car_checkpoints[car][checkpoint_index]:
+            # Previous checkpoint check
+            prev_checkpoint = (car.next_checkpoint_index - 1) % len(self.checkpoints)
+            if checkpoint_index == prev_checkpoint:
+                print(f"Previous checkpoint {checkpoint_index} hit - ignoring")
+                return None
+                
+            # Expected checkpoint check    
+            if checkpoint_index == car.next_checkpoint_index:
+                self.car_checkpoints[car][checkpoint_index] = True
+                car.next_checkpoint_index = (checkpoint_index + 1) % len(self.checkpoints)
+                print(f"Car {car} hit checkpoint {checkpoint_index}. Next: {car.next_checkpoint_index}")
+                return True
+                
+            # Wrong checkpoint
+            print(f"Wrong checkpoint! Expected {car.next_checkpoint_index}, got {checkpoint_index}")
+            return False
+    
+    def get_random_action(self, car):
+        # Use car-specific seed for randomization
+        random.seed(self.car_seeds[car] + int(time.time() * 1000))
+        action = random.randint(0, 5)
+        self.car_seeds[car] = random.randint(1, 10000)  # Update seed
+        return action
 
     def update(self):
         # print car position every 5 seconds
@@ -120,8 +148,14 @@ class GrassTrackRL(Entity):
         for car in self.cars:
             if car.simple_intersects(self.finish_line):
                 if car.anti_cheat == 1:
+                    if all(self.car_checkpoints[car]):
+                        # FINISH LINE REWARD
+                        if hasattr(car, 'give_reward'):
+                            car.give_reward(FINISH_LINE_REWARD)
+                            print(f"Lap complete! Giving finish line reward")
                     car.timer_running = True
                     car.anti_cheat = 0
+                    car.next_checkpoint_index = 0
                     if car.gamemode != "drift":
                         invoke(car.reset_timer, delay = 3)
 
@@ -144,12 +178,60 @@ class GrassTrackRL(Entity):
                 if car.anti_cheat == 0.5:
                     car.anti_cheat = 1
 
+            # TIME PENALTY
+            if hasattr(car, 'give_reward') and car.timer_running:
+                # Time penalty - encourage faster lap times
+                penalty = TIME_PENALTY * time.dt
+                car.give_reward(penalty)
+                print(f"Time penalty: {penalty:.2f}")
+             
+            # SPEED REWARD
+            if hasattr(car, 'give_reward') and car.timer_running:
+                # Speed reward - encourage maintaining good speed
+                if abs(car.speed) > MIN_SPEED_THRESHOLD:
+                    # Scale reward with speed and time
+                    reward = abs(car.speed) * SPEED_REWARD * time.dt
+                    car.give_reward(reward)
+                    
+                    # Extra reward for near max speed
+                    if car.speed > car.topspeed * 0.8:
+                        car.give_reward(reward * 2)
+                        print(f"Speed reward: {reward:.2f} + bonus: {reward * 2:.2f}")
+                    else:
+                        print(f"Speed reward: {reward:.2f}")
+                        
+                elif abs(car.speed) < MIN_SPEED_THRESHOLD:
+                    # Small penalty for very low speed
+                    penalty = -SPEED_REWARD * time.dt
+                    car.give_reward(penalty)
+                    print(f"Speed penalty: {penalty:.2f}")
+
+            
+            # Check for collisions with walls
+            # if car.hitting_wall:
+            #     if hasattr(car, 'give_reward'):
+            #         car.give_reward(WRONG_CHECKPOINT_PENALTY)
+            #         print(f"Car {car} hit a wall! Giving penalty")
+
+            # CHECKPOINT REWARD
             for i, cp in enumerate(self.checkpoints):
-                if car.simple_intersects(cp) and not self.car_checkpoints[car][i]:
-                    # Checkpoint passed
-                    self.car_checkpoints[car][i] = True
-                    print(f"Checkpoint {i} passed! Status: {self.car_checkpoints[car]}")
+                if car.simple_intersects(cp):
+                    result = self.handle_checkpoint(car, i)
+                    if result is True:
+                        if hasattr(car, 'give_reward'):
+                            car.give_reward(CHECKPOINT_REWARD)
+                    elif result is False:
+                        if hasattr(car, 'give_reward'):
+                            car.give_reward(WRONG_CHECKPOINT_PENALTY)
 
                     # Give bonus for reinforcement learning
                     # if hasattr(self.car, "give_bonus_reward"):
                     #     self.car.give_bonus_reward(i)
+        
+            # Random action for reinforcement learning
+            if car.rl and self.enabled and car.visible:
+                self.car_action_timers[car] += time.dt
+                if self.car_action_timers[car] >= self.action_interval:
+                    self.car_action_timers[car] = 0
+                    action = self.get_random_action(car)
+                    car.execute_action(action)

@@ -2,6 +2,7 @@ from ursina import *
 from ursina import curve
 from particles import Particles, TrailRenderer
 import json
+from constants import REINFORCEMENT_LEARNING,SHOW_SENSORS
 
 sign = lambda x: -1 if x < 0 else (1 if x > 0 else 0)
 Text.default_resolution = 1080 * Text.size
@@ -95,16 +96,6 @@ class CarRL(Entity):
 
         # Cosmetics
         self.current_cosmetic = "none"
-        self.viking_helmet = Entity(model = "viking_helmet.obj", texture = "viking_helmet.png", parent = self)
-        self.duck = Entity(model = "duck.obj", parent = self)
-        self.banana = Entity(model = "banana.obj", parent = self)
-        self.surfinbird = Entity(model = "surfinbird.obj", texture = "surfinbird.png", parent = self)
-        self.surfboard = Entity(model = "surfboard.obj", texture = "surfboard.png", parent = self.surfinbird)
-        self.cosmetics = [self.viking_helmet, self.duck, self.banana, self.surfinbird]
-        self.viking_helmet.disable()
-        self.duck.disable()
-        self.banana.disable()
-        self.surfinbird.disable()
 
         # Graphics
         self.graphics = "fancy"
@@ -155,8 +146,28 @@ class CarRL(Entity):
         self.server_running = False
 
         # Reinforcement learning
-        self.rl = False
+        self.rl = REINFORCEMENT_LEARNING
         self.ai_cars = []
+        self.print_timer = 0
+        self.next_checkpoint_index = 0
+
+        # Add reward tracking
+        self.current_reward = 0
+        self.total_reward = 0
+        self.last_reward = 0
+
+        self.input_states = {
+            'forward': False,
+            'left': False, 
+            'back': False,
+            'right': False,
+            'handbrake': False
+        }
+
+        # Car sensors
+        self.show_sensors = SHOW_SENSORS
+        self.sensor_rays = []
+        self.sensor_length = 100
 
         # Shows whether you are connected to a server or not
         self.connected_text = True
@@ -217,6 +228,13 @@ class CarRL(Entity):
         self.beat_mandaw_forest_track = False
         self.beat_mandaw_savannah_track = False
         self.beat_mandaw_lake_track = False
+
+        # Show sensors
+        if self.show_sensors and self.gamemode == "race":
+            for _ in range(5):
+                ray = Entity(model='cube', scale=(0.1, 0.1, self.sensor_length), color=color.green)
+                ray.disable()
+                self.sensor_rays.append(ray)
 
         self.model_path = str(self.model).replace("render/scene/car/", "")
 
@@ -331,10 +349,98 @@ class CarRL(Entity):
         for cosmetic in self.cosmetics:
             cosmetic.y = 0.3
 
+    def execute_action(self, action):
+        """Execute action from RL agent
+        
+        Actions:
+        0: No action
+        1: Forward
+        2: Forward + Left
+        3: Forward + Right
+        4: Brake
+        5: Handbrakes
+        """
+        # Reset all inputs for this car
+        self.input_states = {k: False for k in self.input_states}
+        
+        # Apply selected action
+        if action == 0:  # Do nothing
+            pass
+        elif action == 1:  # Forward
+            self.input_states['forward'] = True
+        elif action == 2:  # Forward + Left
+            self.input_states['forward'] = True
+            self.input_states['left'] = True
+        elif action == 3:  # Forward + Right  
+            self.input_states['forward'] = True
+            self.input_states['right'] = True
+        elif action == 4:  # Brake
+            self.input_states['back'] = True
+        elif action == 5:  # Handbrake
+            self.input_states['handbrake'] = True
+
+    def get_sensor_distances(self):
+        """Returns distances from sensors in all directions"""
+        directions = [
+            (0, 0, 1),      # Forward
+            (0.7, 0, 0.7),  # Forward Right
+            (1, 0, 0),      # Right
+            (-1, 0, 0),     # Left
+            (-0.7, 0, 0.7), # Forward Left
+        ]
+        
+        distances = []
+        
+        for i, direction in enumerate(directions):
+            # Rotate direction based on car's rotation
+            rotated_direction = self.forward * direction[2] + self.right * direction[0]
+            
+            # Cast ray
+            ray = raycast(
+                origin=self.world_position,
+                direction=rotated_direction,
+                distance=self.sensor_length,
+                ignore=[self]
+            )
+            
+            # Get distance or max length if no hit
+            distance = ray.distance if ray.hit else self.sensor_length
+            distances.append(distance)
+            
+            # Update sensor visualization
+            if self.show_sensors and i < len(self.sensor_rays):
+                ray_entity = self.sensor_rays[i]
+                # Position the ray to start from car's position
+                ray_entity.world_position = self.world_position
+                ray_entity.look_at(self.world_position + rotated_direction * distance)
+                ray_entity.world_position += rotated_direction * (distance/2)
+                ray_entity.scale_z = distance
+                ray_entity.enable()
+        
+        return self.speed, distances
+        
+    def give_reward(self, reward):
+        """Give reward to the car and update reward tracking
+        
+        Args:
+            reward (float): Reward value to give (positive or negative)
+        """
+        self.current_reward = reward
+        self.total_reward += reward
+        self.last_reward = reward
+        
+        # Optional: Print reward for debugging
+        print(f"Reward given: {reward:.1f} | Total: {self.total_reward:.1f}")
+
     def update(self):
         # Stopwatch/Timer
         # Race Gamemode
         if self.gamemode == "race":
+            self.print_timer += time.dt  # Add elapsed time
+            if self.print_timer >= 5:
+                self.print_timer = 0
+                print(self.get_sensor_distances())
+            self.get_sensor_distances()
             self.highscore.text = str(round(self.highscore_count, 1))
             self.laps_text.disable()
             if self.timer_running:
@@ -468,60 +574,110 @@ class CarRL(Entity):
         # Main raycast for collision
         y_ray = raycast(origin = self.world_position, direction = (0, -1, 0), ignore = ignore_entities)
 
-        if y_ray.distance <= 5:
-            # Driving
-            if held_keys[self.controls[0]] or held_keys["up arrow"]: #
-                self.speed += self.acceleration * 50 * time.dt
-                self.speed += -self.velocity_y * 4 * time.dt
+        if self.rl:
+            if y_ray.distance <= 5:
+                # Driving
+                if self.input_states['forward']:
+                    self.speed += self.acceleration * 50 * time.dt
+                    self.speed += -self.velocity_y * 4 * time.dt
+                    self.driving = True
+                    # ...existing particle and trail code...
+                
+                # Braking
+                if self.input_states['back']:
+                    self.speed -= self.braking_strenth * time.dt
+                    self.drift_speed -= 20 * time.dt
+                    self.braking = True
+                else:
+                    self.braking = False
 
-                self.driving = True
+                # Hand Braking
+                if self.input_states['handbrake']:
+                    if self.rotation_speed < 0:
+                        self.rotation_speed -= 3 * time.dt
+                    elif self.rotation_speed > 0:
+                        self.rotation_speed += 3 * time.dt
+                    self.drift_speed -= 40 * time.dt
+                    self.speed -= 20 * time.dt
+                    self.max_rotation_speed = 3.0
 
-                # Particles
-                self.particle_time += time.dt
-                if self.particle_time >= self.particle_amount:
-                    self.particle_time = 0
-                    self.particles = Particles(self, self.particle_pivot.world_position - (0, 1, 0))
-                    self.particles.destroy(1)
-            
-                # TrailRenderer / Skid Marks
-                if self.graphics != "ultra fast":
-                    if self.drift_speed <= self.min_drift_speed + 2 and self.start_trail:   
-                        if self.pivot_rotation_distance > 60 or self.pivot_rotation_distance < -60 and self.speed > 10:
-                            for trail in self.trails:
-                                trail.start_trail()
-                            if self.audio:
-                                self.skid_sound.volume = self.volume / 2
-                                self.skid_sound.play()
-                            self.start_trail = False
-                            self.drifting = True
-                        else:
+            # Steering
+            if self.speed > 1 or self.speed < -1:
+                if self.input_states['left']:
+                    self.rotation_speed -= self.steering_amount * time.dt
+                    self.drift_speed -= 5 * time.dt
+                    if self.speed > 1:
+                        self.speed -= self.turning_speed * time.dt
+                    elif self.speed < 0:
+                        self.speed += self.turning_speed / 5 * time.dt
+                elif self.input_states['right']:
+                    self.rotation_speed += self.steering_amount * time.dt
+                    self.drift_speed -= 5 * time.dt
+                    if self.speed > 1:
+                        self.speed -= self.turning_speed * time.dt
+                    elif self.speed < 0:
+                        self.speed += self.turning_speed / 5 * time.dt
+                else:
+                    self.drift_speed += 15 * time.dt
+                    if self.rotation_speed > 0:
+                        self.rotation_speed -= 5 * time.dt
+                    elif self.rotation_speed < 0:
+                        self.rotation_speed += 5 * time.dt
+        else:
+            if y_ray.distance <= 5:
+                # Driving
+                if held_keys[self.controls[0]] or held_keys["up arrow"]: #
+                    self.speed += self.acceleration * 50 * time.dt
+                    self.speed += -self.velocity_y * 4 * time.dt
+
+                    self.driving = True
+
+                    # Particles
+                    self.particle_time += time.dt
+                    if self.particle_time >= self.particle_amount:
+                        self.particle_time = 0
+                        self.particles = Particles(self, self.particle_pivot.world_position - (0, 1, 0))
+                        self.particles.destroy(1)
+                
+                    # TrailRenderer / Skid Marks
+                    if self.graphics != "ultra fast":
+                        if self.drift_speed <= self.min_drift_speed + 2 and self.start_trail:   
+                            if self.pivot_rotation_distance > 60 or self.pivot_rotation_distance < -60 and self.speed > 10:
+                                for trail in self.trails:
+                                    trail.start_trail()
+                                if self.audio:
+                                    self.skid_sound.volume = self.volume / 2
+                                    self.skid_sound.play()
+                                self.start_trail = False
+                                self.drifting = True
+                            else:
+                                self.drifting = False
+                        elif self.drift_speed > self.min_drift_speed + 2 and not self.start_trail:
+                            if self.pivot_rotation_distance < 60 or self.pivot_rotation_distance > -60:
+                                for trail in self.trails:
+                                    if trail.trailing:
+                                        trail.end_trail()
+                                if self.audio:
+                                    self.skid_sound.stop(False)
+                                self.start_trail = True
+                                self.drifting = False
                             self.drifting = False
-                    elif self.drift_speed > self.min_drift_speed + 2 and not self.start_trail:
-                        if self.pivot_rotation_distance < 60 or self.pivot_rotation_distance > -60:
-                            for trail in self.trails:
-                                if trail.trailing:
-                                    trail.end_trail()
-                            if self.audio:
-                                self.skid_sound.stop(False)
-                            self.start_trail = True
+                        if self.speed < 10:
                             self.drifting = False
-                        self.drifting = False
-                    if self.speed < 10:
-                        self.drifting = False
-            else:
-                self.driving = False
-                if self.speed > 1:
-                    self.speed -= self.friction * 5 * time.dt
-                elif self.speed < -1:
-                    self.speed += self.friction * 5 * time.dt
+                else:
+                    self.driving = False
+                    if self.speed > 1:
+                        self.speed -= self.friction * 5 * time.dt
+                    elif self.speed < -1:
+                        self.speed += self.friction * 5 * time.dt
 
-            # Braking
-            if held_keys[self.controls[2] or held_keys["down arrow"]]:
-                self.speed -= self.braking_strenth * time.dt
-                self.drift_speed -= 20 * time.dt
-                self.braking = True
-            else:
-                self.braking = False
+                # Braking
+                if held_keys[self.controls[2] or held_keys["down arrow"]]:
+                    self.speed -= self.braking_strenth * time.dt
+                    self.drift_speed -= 20 * time.dt
+                    self.braking = True
+                else:
+                    self.braking = False
 
             # Audio
             if self.driving or self.braking:
