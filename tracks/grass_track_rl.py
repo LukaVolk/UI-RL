@@ -108,46 +108,60 @@ class GrassTrackRL(Entity):
             'status': self.car_checkpoints[car],
             'total': len(self.checkpoints)
         }
+    
+    def check_checkpoint(self, car):
+        """Check if car has hit next checkpoint in sequence"""
+        if car not in self.car_checkpoints:
+            return False
+            
+        next_checkpoint = self.car_last_checkpoint[car] + 1
+        if next_checkpoint >= len(self.checkpoints):
+            return False
+            
+        # Check if car has hit the next checkpoint
+        if car.simple_intersects(self.checkpoints[next_checkpoint]):
+            if not self.car_checkpoints[car][next_checkpoint]:
+                self.car_checkpoints[car][next_checkpoint] = True
+                self.car_last_checkpoint[car] = next_checkpoint
+                print(f"Checkpoint {next_checkpoint} hit! Reward earned!")
+                return True
+                
+        return False
 
     def update(self):
-        # print car position every 5 seconds
+        # Handle updates for each car
+        for car in self.cars:
+            # Check finish line
+            if car.simple_intersects(self.finish_line):
+                if car.anti_cheat == 1:
+                    car.timer_running = True
+                    car.anti_cheat = 0
+                    if car.gamemode != "drift":
+                        invoke(car.reset_timer, delay=3)
 
-        # self.print_timer += time.dt  # Add elapsed time
-        # if self.print_timer >= 5:
-        #     print(self.car.position)
-        #     self.print_timer = 0
-        if self.car.simple_intersects(self.finish_line):
-            if self.car.anti_cheat == 1:
-                self.car.timer_running = True
-                self.car.anti_cheat = 0
-                if self.car.gamemode != "drift":
-                    invoke(self.car.reset_timer, delay = 3)
+                    car.check_highscore()
+                    self.car_checkpoints[car] = [False] * len(self.checkpoints)
 
-                self.car.check_highscore()
-                self.car_checkpoints[self.car] = [False] * len(self.checkpoints)
+                self.wall1.enable()
+                self.wall2.enable()
+                self.wall3.disable()
+                self.wall4.disable()
 
-            self.wall1.enable()
-            self.wall2.enable()
-            self.wall3.disable()
-            self.wall4.disable()
+            # Check wall triggers
+            if car.simple_intersects(self.wall_trigger):
+                self.wall1.disable()
+                self.wall2.disable()
+                self.wall3.enable()
+                self.wall4.enable()
+                car.anti_cheat = 0.5
 
-        if self.car.simple_intersects(self.wall_trigger):
-            self.wall1.disable()
-            self.wall2.disable()
-            self.wall3.enable()
-            self.wall4.enable()
-            self.car.anti_cheat = 0.5
+            if car.simple_intersects(self.wall_trigger_ramp):
+                if car.anti_cheat == 0.5:
+                    car.anti_cheat = 1
 
-        if self.car.simple_intersects(self.wall_trigger_ramp):
-            if self.car.anti_cheat == 0.5:
-                self.car.anti_cheat = 1
-
-        for i, cp in enumerate(self.checkpoints):
-            if self.car.simple_intersects(cp) and not self.car_checkpoints[self.car][i]:
-                # Checkpoint passed
-                self.car_checkpoints[self.car][i] = True
-                print(f"Checkpoint {i} passed! Status: {self.car_checkpoints[self.car]}")
-
-                # Give bonus for reinforcement learning
-                # if hasattr(self.car, "give_bonus_reward"):
-                #     self.car.give_bonus_reward(i)
+            # Check checkpoints
+            for i, cp in enumerate(self.checkpoints):
+                if car.simple_intersects(cp) and not self.car_checkpoints[car][i]:
+                    # Checkpoint passed
+                    self.car_checkpoints[car][i] = True
+                    print(f"Car {id(car)} passed checkpoint {i}! Status: {self.car_checkpoints[car]}")

@@ -16,6 +16,16 @@ class CarRL(Entity):
             rotation = rotation,
         )
 
+        # RL properties
+        self.rl = True
+        self.current_checkpoint = 0
+        self.last_checkpoint_time = 0
+        self.last_distance = float('inf')
+        self.episode_rewards = 0
+        self.episode_steps = 0
+        self.max_steps = 2000
+        self.previous_position = self.position
+
         # Rotation parent
         self.rotation_parent = Entity()
 
@@ -74,7 +84,7 @@ class CarRL(Entity):
         self.start_trail = True
 
         # Audio
-        self.audio = True
+        self.audio = False
         self.volume = 1
         self.start_sound = True
         self.start_fall = True
@@ -325,8 +335,110 @@ class CarRL(Entity):
         self.trail_pivot.position = (0, -1, 1.5)
         for cosmetic in self.cosmetics:
             cosmetic.y = 0.3
+    
+    def calculate_reward(self):
+        """Calculate total reward based on different components"""
+        reward = (
+            self.checkpoint_reward() * 1.0 +  # w_cp = 1.0
+            self.progress_reward() * 0.5 +    # w_f = 0.5
+            self.speed_reward() * 0.3 +       # w_s = 0.3
+            self.collision_penalty() * 1.0     # w_c = 1.0
+        )
+        return reward
+
+    def checkpoint_reward(self):
+        """Reward for hitting checkpoints"""
+        if self.current_track and hasattr(self.current_track, 'check_checkpoint'):
+            if self.current_track.check_checkpoint(self):
+                return 10.0
+        return 0.0
+
+    def progress_reward(self):
+        """Reward for making progress towards next checkpoint"""
+        if hasattr(self.current_track, 'get_next_checkpoint_pos'):
+            next_cp = self.current_track.get_next_checkpoint_pos(self)
+            current_distance = (self.position - next_cp).length()
+            
+            # Calculate forward progress
+            progress = self.last_distance - current_distance
+            self.last_distance = current_distance
+            
+            return progress * 0.1
+        return 0.0
+
+    def speed_reward(self):
+        """Reward for maintaining good speed"""
+        # Normalize speed between 0 and 1
+        norm_speed = self.speed / self.topspeed
+        
+        # Penalize very slow speeds
+        if norm_speed < 0.2:
+            return -0.1
+            
+        return norm_speed * 0.5
+
+    def collision_penalty(self):
+        """Penalty for collisions"""
+        if self.hitting_wall:
+            return -1.0
+        return 0.0
+
+    def get_state(self):
+        """Get current state for RL agent"""
+        # Calculate forward vector
+        forward = self.forward
+        
+        # Get distances to walls in different directions
+        rays = []
+        ray_directions = [
+            (forward, "forward"),
+            (forward * Vec3(1.2, 0, 1), "forward_right"),
+            (forward * Vec3(-1.2, 0, 1), "forward_left"),
+            (forward * Vec3(1.5, 0, 0), "right"),
+            (forward * Vec3(-1.5, 0, 0), "left")
+        ]
+        
+        for direction, _ in ray_directions:
+            hit_info = raycast(
+                origin=self.position,
+                direction=direction,
+                distance=50,
+                ignore=[self]
+            )
+            rays.append(hit_info.distance if hit_info.hit else 50)
+        
+        # Normalized state vector
+        state = {
+            'rays': rays,
+            'speed': self.speed / self.topspeed,
+            'steering': self.rotation_speed / self.max_rotation_speed,
+            'drift': 1.0 if self.drifting else 0.0,
+            'collision': 1.0 if self.hitting_wall else 0.0
+        }
+        
+        return state
 
     def update(self):
+        # RL
+        if self.rl:
+            # Get current state
+            state = self.get_state()
+            
+            # Calculate reward
+            reward = self.calculate_reward()
+            print(f"Reward: {reward}")
+            self.episode_rewards += reward
+            
+            # Handle episode termination
+            done = self.episode_steps >= self.max_steps
+            
+            if done:
+                print(f"Episode ended: Total reward: {self.episode_rewards}")
+                self.reset_car()
+                self.episode_rewards = 0
+                self.episode_steps = 0
+            
+            self.episode_steps += 1
         # Stopwatch/Timer
         # Race Gamemode
         if self.gamemode == "race":
@@ -636,7 +748,7 @@ class CarRL(Entity):
         # Check if car is hitting the ground
         if self.visible:
             if y_ray.distance <= self.scale_y * 1.7 + abs(movementY):
-                print(y_ray)
+                #print(y_ray)
                 self.velocity_y = 0
                 # Check if hitting a wall or steep slope
                 if y_ray.world_normal.y > 0.7 and y_ray.world_point.y - self.world_y < 0.5:
