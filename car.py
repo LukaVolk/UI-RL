@@ -819,7 +819,6 @@ class Car(Entity):
         # Check if car is hitting the ground
         if self.visible:
             if y_ray.distance <= self.scale_y * 1.7 + abs(movementY):
-                print(y_ray)
                 self.velocity_y = 0
                 # Check if hitting a wall or steep slope
                 if y_ray.world_normal.y > 0.7 and y_ray.world_point.y - self.world_y < 0.5:
