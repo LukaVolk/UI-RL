@@ -2,7 +2,7 @@ from ursina import *
 from ursina import curve
 from particles import Particles, TrailRenderer
 import json
-from constants import REINFORCEMENT_LEARNING,SHOW_SENSORS
+from constants import ACTION_MAP, REINFORCEMENT_LEARNING,SHOW_SENSORS
 
 sign = lambda x: -1 if x < 0 else (1 if x > 0 else 0)
 Text.default_resolution = 1080 * Text.size
@@ -93,6 +93,7 @@ class CarRL(Entity):
         # Collision
         self.copy_normals = False
         self.hitting_wall = False
+        self.wall_hit = False
 
         # Cosmetics
         self.current_cosmetic = "none"
@@ -360,24 +361,11 @@ class CarRL(Entity):
         4: Brake
         5: Handbrakes
         """
-        # Reset all inputs for this car
         self.input_states = {k: False for k in self.input_states}
+        for key in ACTION_MAP.get(action, []):
+            self.input_states[key] = True
         
-        # Apply selected action
-        if action == 0:  # Do nothing
-            pass
-        elif action == 1:  # Forward
-            self.input_states['forward'] = True
-        elif action == 2:  # Forward + Left
-            self.input_states['forward'] = True
-            self.input_states['left'] = True
-        elif action == 3:  # Forward + Right  
-            self.input_states['forward'] = True
-            self.input_states['right'] = True
-        elif action == 4:  # Brake
-            self.input_states['back'] = True
-        elif action == 5:  # Handbrake
-            self.input_states['handbrake'] = True
+        
 
     def get_sensor_distances(self):
         """Returns distances from sensors in all directions"""
@@ -429,8 +417,7 @@ class CarRL(Entity):
         self.total_reward += reward
         self.last_reward = reward
         
-        # Optional: Print reward for debugging
-        print(f"Reward given: {reward:.1f} | Total: {self.total_reward:.1f}")
+        #print(f"Reward given: {reward:.1f} | Total: {self.total_reward:.1f}")
 
     def get_state(self):
         """Get current state for RL model
@@ -821,6 +808,37 @@ class CarRL(Entity):
 
         # Check if car is hitting the ground
         if self.visible:
+            wall_check_front = raycast(
+                origin=self.world_position,
+                direction=self.forward,
+                distance=1,
+                ignore=[self]
+            )
+            wall_check_back = raycast(
+                origin=self.world_position,
+                direction=-self.forward,
+                distance=1,
+                ignore=[self]
+            )
+            if wall_check_front.hit or wall_check_back.hit:
+                wall_impact = 0
+                if wall_check_front.hit:
+                    wall_impact = abs(Vec3.dot(wall_check_front.world_normal, self.forward))
+                if wall_check_back.hit:
+                    wall_impact = abs(Vec3.dot(wall_check_back.world_normal, -self.forward))
+                print(f"Wall impact: {wall_impact:.2f}")
+                if wall_impact > 0.5:  # Head-on collision
+                    deceleration = 50 * time.dt * wall_impact
+                    self.speed -= deceleration
+                    self.speed = max(self.speed, 2)
+                    print(f"Speed after collision: {self.speed:.2f}")
+                    self.wall_hit = True
+                else:
+                    self.wall_hit = False
+            else:
+                self.wall_hit = False
+
+            #print(f"y_ray.world_normal.y = {y_ray.world_normal.y} | y_ray.world_point.y = {y_ray.world_point.y} | self.world_y = {self.world_y}")
             if y_ray.distance <= self.scale_y * 1.7 + abs(movementY):
                 self.velocity_y = 0
                 # Check if hitting a wall or steep slope
@@ -881,6 +899,7 @@ class CarRL(Entity):
             # For RL training, always use grass track position
             self.position = (-80, -30, 18.5)
             self.rotation = (0, 90, 0)
+            self.total_reward = 0
         else:
             self.position = (-80, -30, 18.5)
             self.rotation = (0, 90, 0)

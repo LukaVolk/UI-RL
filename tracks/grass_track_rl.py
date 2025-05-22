@@ -1,6 +1,6 @@
 from ursina import *
 import random
-from constants import CHECKPOINT_REWARD, CHECKPOINT_WIDTH, FINISH_LINE_REWARD, MIN_SPEED_THRESHOLD, SHOW_CHECKPOINTS, SPEED_REWARD, TIME_PENALTY, WRONG_CHECKPOINT_PENALTY
+from constants import CHECKPOINT_REWARD, CHECKPOINT_WIDTH, FINISH_LINE_REWARD, MIN_SPEED_THRESHOLD, SHOW_CHECKPOINTS, SPEED_REWARD, TIME_PENALTY, WALL_PENALTY, WRONG_CHECKPOINT_PENALTY, SHOW_BOUNDRIES, SHOW_WALLS
 
 class GrassTrackRL(Entity):
     def __init__(self, cars):
@@ -24,12 +24,12 @@ class GrassTrackRL(Entity):
         self.print_timer = 0
 
         self.finish_line = Entity(model = "cube", position = (-62, -40, 15), rotation = (0, 0, 0), scale = (3, 8, 30), visible = False)
-        self.boundaries = Entity(model = "grass_track_bounds.obj", collider = "mesh", position = (0, -50, 0), rotation = (0, 270, 0), scale = (25, 25, 25), visible = False)
+        self.boundaries = Entity(model = "grass_track_bounds.obj", collider = "mesh", position = (0, -50, 0), rotation = (0, 270, 0), scale = (25, 25, 25), visible = SHOW_BOUNDRIES)
 
-        self.wall1 = Entity(model = "cube", position = (-5, -40, 35), rotation = (0, 90, 0), collider = "box", scale = (5, 30, 50), visible = False)
-        self.wall2 = Entity(model = "cube", position = (20, -40, 1), rotation = (0, 90, 0), collider = "box", scale = (5, 30, 150), visible = False)
-        self.wall3 = Entity(model = "cube", position = (-21, -40, 15), rotation = (0, 0, 0), collider = "box", scale = (5, 30, 50), visible = False)
-        self.wall4 = Entity(model = "cube", position = (9, -40, 14), rotation = (0, 0, 0), collider = "box", scale = (5, 30, 50), visible = False)
+        self.wall1 = Entity(model = "cube", position = (-5, -40, 35), rotation = (0, 90, 0), collider = "box", scale = (5, 30, 50), visible = SHOW_WALLS)
+        self.wall2 = Entity(model = "cube", position = (20, -40, 1), rotation = (0, 90, 0), collider = "box", scale = (5, 30, 150), visible = SHOW_WALLS)
+        self.wall3 = Entity(model = "cube", position = (-21, -40, 15), rotation = (0, 0, 0), collider = "box", scale = (5, 30, 50), visible = SHOW_WALLS)
+        self.wall4 = Entity(model = "cube", position = (9, -40, 14), rotation = (0, 0, 0), collider = "box", scale = (5, 30, 50), visible = SHOW_WALLS)
 
         self.wall_trigger = Entity(model = "cube", position = (25, -40.2, 65), rotation = (0, 0, 0), scale = (3, 20, 50), visible = False)
         self.wall_trigger_ramp = Entity(model = "cube", position = (-82, -34, -64), rotation = (0, 0, 0), scale = (3, 20, 50), visible = False)
@@ -183,7 +183,7 @@ class GrassTrackRL(Entity):
                 # Time penalty - encourage faster lap times
                 penalty = TIME_PENALTY * time.dt
                 car.give_reward(penalty)
-                print(f"Time penalty: {penalty:.2f}")
+                #print(f"Time penalty: {penalty:.2f}")
              
             # SPEED REWARD
             if hasattr(car, 'give_reward') and car.timer_running:
@@ -196,22 +196,20 @@ class GrassTrackRL(Entity):
                     # Extra reward for near max speed
                     if car.speed > car.topspeed * 0.8:
                         car.give_reward(reward * 2)
-                        print(f"Speed reward: {reward:.2f} + bonus: {reward * 2:.2f}")
-                    else:
-                        print(f"Speed reward: {reward:.2f}")
+                        #print(f"Speed reward: {reward:.2f} + bonus: {reward * 2:.2f}")
                         
                 elif abs(car.speed) < MIN_SPEED_THRESHOLD:
                     # Small penalty for very low speed
                     penalty = -SPEED_REWARD * time.dt
                     car.give_reward(penalty)
-                    print(f"Speed penalty: {penalty:.2f}")
+                    #print(f"Speed penalty: {penalty:.2f}")
 
             
             # Check for collisions with walls
-            # if car.hitting_wall:
-            #     if hasattr(car, 'give_reward'):
-            #         car.give_reward(WRONG_CHECKPOINT_PENALTY)
-            #         print(f"Car {car} hit a wall! Giving penalty")
+            if car.wall_hit:
+                if hasattr(car, 'give_reward'):
+                    car.give_reward(WALL_PENALTY)
+                    print(f"Car {car} hit a wall! Giving penalty")
 
             # CHECKPOINT REWARD
             for i, cp in enumerate(self.checkpoints):

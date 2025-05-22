@@ -145,6 +145,7 @@ class MainMenuRL(Entity):
                 rl_car.timer_running = False
                 rl_car.count = 0.0
                 rl_car.reset_count = 0.0
+                rl_car.total_reward = 0
             
             for rl_car in cars:
                 rl_car.update()
