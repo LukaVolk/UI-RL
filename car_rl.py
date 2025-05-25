@@ -17,7 +17,7 @@ class CarRL(Entity):
             rotation = rotation,
         )
 
-        self.grass_track_rl = True
+        self.grass_track_rl = False
 
         # Rotation parent
         self.rotation_parent = Entity()
@@ -151,6 +151,7 @@ class CarRL(Entity):
         self.ai_cars = []
         self.print_timer = 0
         self.next_checkpoint_index = 0
+        self.prev_position = None
 
         # Add reward tracking
         self.current_reward = 0
@@ -367,7 +368,7 @@ class CarRL(Entity):
         
         
 
-    def get_sensor_distances(self):
+    def get_sensor_distances(self, waypoint):
         """Returns distances from sensors in all directions"""
         directions = [
             (0, 0, 1),      # Forward
@@ -378,7 +379,7 @@ class CarRL(Entity):
         ]
         
         distances = []
-        
+
         for i, direction in enumerate(directions):
             # Rotate direction based on car's rotation
             rotated_direction = self.forward * direction[2] + self.right * direction[0]
@@ -388,6 +389,7 @@ class CarRL(Entity):
                 origin=self.world_position,
                 direction=rotated_direction,
                 distance=self.sensor_length,
+                traverse_target=self.grass_track_rl.checkpoints[waypoint] if waypoint is not None and self.grass_track_rl else None,
                 ignore=[self]
             )
             
@@ -451,8 +453,8 @@ class CarRL(Entity):
             self.print_timer += time.dt  # Add elapsed time
             if self.print_timer >= 5:
                 self.print_timer = 0
-                print(self.get_sensor_distances())
-            self.get_sensor_distances()
+                #print(self.get_sensor_distances())
+            #self.get_sensor_distances()
             self.highscore.text = str(round(self.highscore_count, 1))
             self.laps_text.disable()
             if self.timer_running:
