@@ -156,6 +156,7 @@ class MainMenuRL(Entity):
                 g.enable()
                 g.alpha = 255
 
+            grass_track_rl.is_learning = True
             '''
             time.sleep(3) 
             for _ in range(5):
@@ -210,6 +211,11 @@ class MainMenuRL(Entity):
         reinforcment_learning_button.on_click = Func(grass_track_func_ai)
 
         def main_menu():
+            grass_track_rl.is_learning = False
+            grass_track_rl.print_timer = 0
+            grass_track_rl.timer_running = False
+            grass_track_rl.timer.disable()
+            grass_track_rl.episode.disable()
             for car in self.cars:
                 car.visible = False
                 car.position = (0, 0, 4)

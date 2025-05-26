@@ -29,6 +29,13 @@ class GrassTrackRL(Entity):
         self.print_timer = 0
         self.is_learning = False
 
+        #timer
+        self.timer_running = False
+        self.timer = Text(text = "", origin = (0, 0), size = 0.05, scale = (1, 1), position = (-0.7, 0.43))
+        self.episode = Text(text = "", origin = (0, 0), size = 0.05, scale = (0.6, 0.6), position = (-0.65, 0.38))
+        self.timer.disable()
+        self.episode.disable()
+
         self.finish_line = Entity(model = "cube", position = (-62, -40, 15), rotation = (0, 0, 0), scale = (3, 8, 30), visible = False)
         self.boundaries = Entity(model = "grass_track_bounds.obj", collider = "mesh", position = (0, -50, 0), rotation = (0, 270, 0), scale = (25, 25, 25), visible = SHOW_BOUNDRIES)
 
@@ -163,8 +170,13 @@ class GrassTrackRL(Entity):
 
     def update(self):
         # print car position every 5 seconds
-
-        self.print_timer += time.dt  # Add elapsed time
+        if self.is_learning:
+            self.timer_running = True
+            self.timer.enable()
+            self.episode.enable()
+            self.print_timer += time.dt  # Add elapsed time
+            self.timer.text = str(round(self.print_timer, 1)) + "s"
+            self.episode.text = f"Episode: {self.current_episode + 1}/{self.num_of_episodes}"
         # if self.print_timer >= 5:
         #     print(self.car.position)
         #     self.print_timer = 0
@@ -188,13 +200,9 @@ class GrassTrackRL(Entity):
                         if hasattr(car, 'give_reward'):
                             car.give_reward(FINISH_LINE_REWARD)
                             print(f"Lap complete! Giving finish line reward")
-                    car.timer_running = True
                     car.anti_cheat = 0
                     car.next_checkpoint_index = 0
-                    if car.gamemode != "drift":
-                        invoke(car.reset_timer, delay = 3)
 
-                    car.check_highscore()
                     self.car_checkpoints[car] = [False] * len(self.checkpoints)
 
                 self.wall1.enable()
@@ -214,14 +222,14 @@ class GrassTrackRL(Entity):
                     car.anti_cheat = 1
 
             # TIME PENALTY
-            if hasattr(car, 'give_reward') and car.timer_running:
+            if hasattr(car, 'give_reward') and self.timer_running:
                 # Time penalty - encourage faster lap times
                 penalty = TIME_PENALTY * time.dt
                 car.give_reward(penalty)
                 #print(f"Time penalty: {penalty:.2f}")
              
             # SPEED REWARD
-            if hasattr(car, 'give_reward') and car.timer_running:
+            if hasattr(car, 'give_reward') and self.timer_running:
                 # Speed reward - encourage maintaining good speed
                 if abs(car.speed) > MIN_SPEED_THRESHOLD:
                     # Scale reward with speed and time
