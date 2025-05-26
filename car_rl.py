@@ -451,7 +451,7 @@ class CarRL(Entity):
             self.print_timer += time.dt  # Add elapsed time
             if self.print_timer >= 5:
                 self.print_timer = 0
-                print(self.get_sensor_distances())
+                #print(self.get_sensor_distances())
             self.get_sensor_distances()
             self.highscore.text = str(round(self.highscore_count, 1))
             self.laps_text.disable()
@@ -826,12 +826,12 @@ class CarRL(Entity):
                     wall_impact = abs(Vec3.dot(wall_check_front.world_normal, self.forward))
                 if wall_check_back.hit:
                     wall_impact = abs(Vec3.dot(wall_check_back.world_normal, -self.forward))
-                print(f"Wall impact: {wall_impact:.2f}")
+                #print(f"Wall impact: {wall_impact:.2f}")
                 if wall_impact > 0.5:  # Head-on collision
                     deceleration = 50 * time.dt * wall_impact
                     self.speed -= deceleration
                     self.speed = max(self.speed, 2)
-                    print(f"Speed after collision: {self.speed:.2f}")
+                    #print(f"Speed after collision: {self.speed:.2f}")
                     self.wall_hit = True
                 else:
                     self.wall_hit = False
