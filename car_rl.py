@@ -166,6 +166,8 @@ class CarRL(Entity):
             'handbrake': False
         }
 
+        self.action_queue = []
+
         # Car sensors
         self.show_sensors = SHOW_SENSORS
         self.sensor_rays = []
@@ -361,6 +363,8 @@ class CarRL(Entity):
         3: Forward + Right
         4: Brake
         5: Handbrakes
+        6: Left
+        7: Right
         """
         self.input_states = {k: False for k in self.input_states}
         for key in ACTION_MAP.get(action, []):
@@ -385,13 +389,21 @@ class CarRL(Entity):
             rotated_direction = self.forward * direction[2] + self.right * direction[0]
             
             # Cast ray
-            ray = raycast(
-                origin=self.world_position,
-                direction=rotated_direction,
-                distance=self.sensor_length,
-                traverse_target=self.grass_track_rl.checkpoints[waypoint] if waypoint is not None and self.grass_track_rl else None,
-                ignore=[self]
-            )
+            if waypoint is not None and self.grass_track_rl:
+                ray = raycast(
+                    origin=self.world_position,
+                    direction=rotated_direction,
+                    distance=self.sensor_length,
+                    traverse_target=self.grass_track_rl.checkpoints[waypoint] if waypoint is not None and self.grass_track_rl else None,
+                    ignore=[self]
+                )
+            else:
+                ray = raycast(
+                    origin=self.world_position,
+                    direction=rotated_direction,
+                    distance=self.sensor_length,
+                    ignore=[self]
+                )
             
             # Get distance or max length if no hit
             distance = ray.distance if ray.hit else self.sensor_length
@@ -431,7 +443,7 @@ class CarRL(Entity):
         normalized_speed = self.speed / self.topspeed
         
         # Get sensor distances
-        sensor_distances = self.get_sensor_distances()
+        sensor_distances = self.get_sensor_distances(self.next_checkpoint_index)
         
         # Normalize distances to 0-1 range
         normalized_distances = [d / self.sensor_length for d in sensor_distances]
@@ -445,6 +457,22 @@ class CarRL(Entity):
         }
         
         return state
+    
+    def reset(self):
+        # Reset car and environment state
+            
+        self.position = (-80, -30, 18.5)
+        self.rotation = (0, 90, 0)
+        self.visible = True
+        self.collision = False 
+        self.camera_follow = False         
+        self.speed = 0
+        self.velocity_y = 0
+        self.anti_cheat = 1
+        self.timer_running = True
+        self.count = 0.0
+        self.reset_count = 0.0
+        self.total_reward = 0
 
     def update(self):
         # Stopwatch/Timer

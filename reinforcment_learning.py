@@ -53,7 +53,7 @@ class ReinforcementLearning():
                 self.prev_dist = new_dist
                 for dist in new_dist_arr:
                     if dist < 0.1:
-                        reward += 10.
+                        reward += 10 
                         #tuki je problem, ker naslednji reward bo pol ful slabsi
                         self.current_waypoint_index += 1
                         print(f"Passed waypoint {self.current_waypoint_index}")
@@ -179,47 +179,48 @@ class DQNAgent:
     def store_experience(self, state, action, reward, next_state, done):
         self.replay_buffer.append((state, action, reward, next_state, done))
 
-    def learn(self):
-        self.current_step += 1
-        if len(self.replay_buffer) < self.batch_size:
-            return
+    def learn(self, cars):
+        for car in cars:
+            self.current_step += 1
+            if len(self.replay_buffer) < self.batch_size:
+                return
 
-        batch = random.sample(self.replay_buffer, self.batch_size)
-        # Filter out any tuples where state or next_state is None
-        filtered_batch = [exp for exp in batch if exp[0] is not None and exp[3] is not None]
-        if len(filtered_batch) < self.batch_size:
-            return
+            batch = random.sample(self.replay_buffer, self.batch_size)
+            # Filter out any tuples where state or next_state is None
+            filtered_batch = [exp for exp in batch if exp[0] is not None and exp[3] is not None]
+            if len(filtered_batch) < self.batch_size:
+                return
 
-        states, actions, rewards, next_states, dones = zip(*filtered_batch)
+            states, actions, rewards, next_states, dones = zip(*filtered_batch)
 
-        states = [np.asarray(s, dtype=np.float32).reshape(self.observation_size) for s in states]
-        next_states = [np.asarray(ns, dtype=np.float32).reshape(self.observation_size) for ns in next_states]
+            states = [np.asarray(s, dtype=np.float32).reshape(self.observation_size) for s in states]
+            next_states = [np.asarray(ns, dtype=np.float32).reshape(self.observation_size) for ns in next_states]
 
-        states_t = torch.tensor(np.stack(states), dtype=torch.float32)
-        actions_t = torch.tensor(actions, dtype=torch.long).unsqueeze(-1)
-        rewards_t = torch.tensor(rewards, dtype=torch.float32).unsqueeze(-1)
-        next_states_t = torch.tensor(np.stack(next_states), dtype=torch.float32)
-        dones_t = torch.tensor(dones, dtype=torch.float32).unsqueeze(-1)
+            states_t = torch.tensor(np.stack(states), dtype=torch.float32)
+            actions_t = torch.tensor(actions, dtype=torch.long).unsqueeze(-1)
+            rewards_t = torch.tensor(rewards, dtype=torch.float32).unsqueeze(-1)
+            next_states_t = torch.tensor(np.stack(next_states), dtype=torch.float32)
+            dones_t = torch.tensor(dones, dtype=torch.float32).unsqueeze(-1)
 
-        # Compute Q-values for current states
-        q_values = self.q_network(states_t).gather(1, actions_t)
+            # Compute Q-values for current states
+            q_values = self.q_network(states_t).gather(1, actions_t)
 
-        # Compute target Q-values (using target network)
-        next_q_values = self.target_q_network(next_states_t).max(1)[0].unsqueeze(-1)
-        target_q_values = rewards_t + self.gamma * next_q_values * (1 - dones_t)
+            # Compute target Q-values (using target network)
+            next_q_values = self.target_q_network(next_states_t).max(1)[0].unsqueeze(-1)
+            target_q_values = rewards_t + self.gamma * next_q_values * (1 - dones_t)
 
-        # Compute loss and update Q-network
-        loss = self.loss_fn(q_values, target_q_values)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+            # Compute loss and update Q-network
+            loss = self.loss_fn(q_values, target_q_values)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
 
-        # Decay epsilon
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+            # Decay epsilon
+            self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
-        # Periodically update target network
-        if self.current_step % 100 == 0: # Update every 100 steps (or episodes)
-            self.target_q_network.load_state_dict(self.q_network.state_dict())
+            # Periodically update target network
+            if self.current_step % 100 == 0: # Update every 100 steps (or episodes)
+                self.target_q_network.load_state_dict(self.q_network.state_dict())
 
     def save_model(self, path):
         torch.save(self.q_network.state_dict(), path)

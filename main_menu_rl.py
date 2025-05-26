@@ -156,6 +156,7 @@ class MainMenuRL(Entity):
                 g.enable()
                 g.alpha = 255
 
+            '''
             time.sleep(3) 
             for _ in range(5):
 
@@ -202,6 +203,7 @@ class MainMenuRL(Entity):
                 # Start the first episode
                 current_obs = env.reset()
                 env.current_episode = 0 # Track episodes manually
+            '''
 
         #Reinforcement Learning Menu
         reinforcment_learning_button = Button(text = "Reinforcement Learning", color = color.gray, highlight_color = color.light_gray, scale_y = 0.1, scale_x = 0.3, y = -0.21, parent = self.start_menu)
