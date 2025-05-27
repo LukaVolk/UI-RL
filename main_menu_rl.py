@@ -212,6 +212,7 @@ class MainMenuRL(Entity):
 
         def main_menu():
             grass_track_rl.is_learning = False
+            grass_track_rl.is_reinforcement_learning = False
             grass_track_rl.print_timer = 0
             grass_track_rl.timer_running = False
             grass_track_rl.timer.disable()
