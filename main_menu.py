@@ -3,7 +3,6 @@ from ursina import curve
 from server import Server
 import os
 from car import Car
-from reinforcment_learning import ReinforcementLearning
 from tracks.sand_track import SandTrack
 from tracks.grass_track import GrassTrack
 from tracks.snow_track import SnowTrack

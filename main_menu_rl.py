@@ -1,7 +1,7 @@
 from ursina import *
 from ursina import curve
 import os
-from reinforcment_learning import ReinforcementLearning, DQNAgent
+from reinforcment_learning import DQNAgent
 
 
 

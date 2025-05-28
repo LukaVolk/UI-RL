@@ -30,6 +30,8 @@ class GrassTrackRL(Entity):
         self.is_learning = False
         self.is_reinforcement_learning = False
 
+        self.top_k_cars = set()  # Set to store top K cars
+
         #timer
         self.timer_running = False
         self.timer = Text(text = "", origin = (0, 0), size = 0.05, scale = (1, 1), position = (-0.7, 0.43))
@@ -150,7 +152,7 @@ class GrassTrackRL(Entity):
         # Use car-specific seed for randomization
         #tuki dodaj dodatne utezi glede na avto
         random.seed(self.car_seeds[car] + int(time.time() * 1000))
-        action = random.randint(0, len(ACTION_MAP))
+        action = random.randint(0, len(ACTION_MAP) - 1)  # Random action index
         self.car_seeds[car] = random.randint(1, 10000)  # Update seed
         return action
     
@@ -173,9 +175,17 @@ class GrassTrackRL(Entity):
 
     def learning_process(self):
         #print(f"Episode: {self.current_episode}, Timer: {self.print_timer:.2f}")
-        if self.print_timer >= self.episode_length and REINFORCEMENT_LEARNING:
+        if self.print_timer >= self.episode_length:
             self.print_timer = 0
             self.current_episode += 1
+            # Store current episode rewards
+            car_rewards = {car: car.total_reward for car in self.cars}
+            sorted_cars = sorted(self.cars, key=lambda c: car_rewards[c], reverse=True)
+            self.top_k_cars = set(sorted_cars[:TOP_K])
+
+            print(f"Top {TOP_K} cars this episode:")
+            for c in self.top_k_cars:
+                print(f" - {c} with reward {car_rewards[c]:.2f}")
             for car in self.cars:
                 self.car_action_queues.append([car.action_queue.copy(), car.total_reward])
                 if hasattr(car, 'reset'):
@@ -268,7 +278,7 @@ class GrassTrackRL(Entity):
                 self.car_action_timers[car] += time.dt
                 if self.car_action_timers[car] >= self.action_interval:
                     self.car_action_timers[car] = 0
-                    action = self.get_random_action(car)
+                    action = self.DQNAgent.choose_action(state)
                     car.execute_action(action)
 
             
@@ -278,7 +288,7 @@ class GrassTrackRL(Entity):
 
             #print(f"Action: {action}, Reward: {reward}, State: {state}")
             #store experience
-            if action is not None:
+            if car in self.top_k_cars and action is not None:
                 self.DQNAgent.store_experience(
                     state=state, 
                     action=action, 
@@ -286,10 +296,11 @@ class GrassTrackRL(Entity):
                     next_state=next_state, 
                     done=done
                 )
+        self.DQNAgent.learn()
+        if self.current_episode % 10 == 0:
+            self.DQNAgent.save_model(f"models/dqn_model_ep{self.current_episode}.pth")
 
     def exploitation_process(self):
-        #in this part we will use the trained model to control the car
-        #print(f"Exploitation Phase - Episode: {self.current_episode}, Timer: {self.print_timer:.2f}")
         if self.print_timer >= self.episode_length and REINFORCEMENT_LEARNING:
             self.print_timer = 0
             self.current_episode += 1
@@ -297,21 +308,14 @@ class GrassTrackRL(Entity):
                 if hasattr(car, 'reset'):
                     car.reset()
                 self.current_waypoint_index = 0
-            # reset exploitation
-        
-        #exploitation
 
         for car in self.cars:
             if car.simple_intersects(self.finish_line):
                 if car.anti_cheat == 1:
                     if all(self.car_checkpoints[car]):
-                        # FINISH LINE REWARD
-                        if hasattr(car, 'give_reward'):
-                            car.give_reward(FINISH_LINE_REWARD)
-                            print(f"Lap complete! Giving finish line reward")
+                        print(f"Lap complete!")
                     car.anti_cheat = 0
                     car.next_checkpoint_index = 0
-
                     self.car_checkpoints[car] = [False] * len(self.checkpoints)
 
                 self.wall1.enable()
@@ -330,75 +334,15 @@ class GrassTrackRL(Entity):
                 if car.anti_cheat == 0.5:
                     car.anti_cheat = 1
 
-            # TIME PENALTY
-            if hasattr(car, 'give_reward') and self.timer_running:
-                # Time penalty - encourage faster lap times
-                penalty = TIME_PENALTY * time.dt
-                car.give_reward(penalty)
-                #print(f"Time penalty: {penalty:.2f}")
-             
-            # SPEED REWARD
-            if hasattr(car, 'give_reward') and self.timer_running:
-                # Speed reward - encourage maintaining good speed
-                if abs(car.speed) > MIN_SPEED_THRESHOLD:
-                    # Scale reward with speed and time
-                    reward = abs(car.speed) * SPEED_REWARD * time.dt
-                    car.give_reward(reward)
-                    
-                    # Extra reward for near max speed
-                    if car.speed > car.topspeed * 0.8:
-                        car.give_reward(reward * 2)
-                        #print(f"Speed reward: {reward:.2f} + bonus: {reward * 2:.2f}")
-                        
-                elif abs(car.speed) < MIN_SPEED_THRESHOLD:
-                    # Small penalty for very low speed
-                    penalty = -SPEED_REWARD * time.dt
-                    car.give_reward(penalty)
-                    #print(f"Speed penalty: {penalty:.2f}")
-
-            
-            # Check for collisions with walls
-            if car.wall_hit:
-                if hasattr(car, 'give_reward'):
-                    car.give_reward(WALL_PENALTY)
-            #print(f"Car {car} wall hit: {car.wall_hit}")
-            # CHECKPOINT REWARD
-            for i, cp in enumerate(self.checkpoints):
-                if car.simple_intersects(cp):
-                    result = self.handle_checkpoint(car, i)
-                    if result is True:
-                        if hasattr(car, 'give_reward'):
-                            car.give_reward(CHECKPOINT_REWARD)
-                    elif result is False:
-                        if hasattr(car, 'give_reward'):
-                            car.give_reward(WRONG_CHECKPOINT_PENALTY)
-
-                    # Give bonus for reinforcement learning
-                    # if hasattr(self.car, "give_bonus_reward"):
-                    #     self.car.give_bonus_reward(i)
-            state = car.get_state2(self.checkpoints)
-            action = None
-            # Use DQN agent to get action
+            # Skip car control if not enabled
             if car.rl and self.enabled and car.visible:
                 self.car_action_timers[car] += time.dt
                 if self.car_action_timers[car] >= self.action_interval:
                     self.car_action_timers[car] = 0
+                    state = car.get_state2(self.checkpoints)
                     action = self.DQNAgent.choose_action(state)
                     car.execute_action(action)
-            
-            reward = car.total_reward if hasattr(car, 'total_reward') else 0
-            next_state = car.get_state2(self.checkpoints)
-            done = self._is_done(car)
-            #print(f"Action: {action}, Reward: {reward}, State: {state}")
-            #store experience
-            if action is not None:
-                self.DQNAgent.store_experience(
-                    state=state, 
-                    action=action, 
-                    reward=reward, 
-                    next_state=next_state, 
-                    done=done
-                )
+
 
     def update(self):
         if self.current_episode >= self.num_of_episodes:
@@ -425,6 +369,8 @@ class GrassTrackRL(Entity):
             self.print_timer += time.dt  # Add elapsed time
             self.timer.text = str(round(self.print_timer, 1)) + "s"
             self.episode.text = f"Episode: {self.current_episode + 1}/{self.num_of_episodes}"
+            # if REINFORCEMENT_LEARNING:
+            #     self.learning_process()
             self.learning_process()
 
         if self.is_reinforcement_learning:
@@ -434,6 +380,8 @@ class GrassTrackRL(Entity):
             self.print_timer += time.dt  # Add elapsed time
             self.timer.text = str(round(self.print_timer, 1)) + "s"
             self.episode.text = f"Episode: {self.current_episode + 1}/{self.num_of_episodes}"
+            # if REINFORCEMENT_LEARNING:
+            #     self.exploitation_process()
             self.exploitation_process()
 
         if not self.is_learning and not self.is_reinforcement_learning:

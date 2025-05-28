@@ -304,16 +304,23 @@ class CarRL(Entity):
             rotated_direction = self.forward * direction[2] + self.right * direction[0]
             
             # Cast ray
-            if waypoint is not None and self.grass_track_rl:
-                ray = raycast(
-                    origin=self.world_position,
-                    direction=rotated_direction,
-                    distance=self.sensor_length,
-                    traverse_target=self.grass_track_rl.checkpoints[waypoint] if waypoint is not None and self.grass_track_rl else None,
-                    ignore=[self]
-                )
-            else:
-                ray = raycast(
+            # if waypoint is not None and self.grass_track_rl:
+            #     ray = raycast(
+            #         origin=self.world_position,
+            #         direction=rotated_direction,
+            #         distance=self.sensor_length,
+            #         traverse_target=self.grass_track_rl.checkpoints[waypoint] if waypoint is not None and self.grass_track_rl else None,
+            #         ignore=[self]
+            #     )
+            # else:
+            #     ray = raycast(
+            #         origin=self.world_position,
+            #         direction=rotated_direction,
+            #         distance=self.sensor_length,
+            #         ignore=[self]
+            #     )
+
+            ray = raycast(
                     origin=self.world_position,
                     direction=rotated_direction,
                     distance=self.sensor_length,

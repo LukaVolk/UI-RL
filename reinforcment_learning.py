@@ -1,123 +1,123 @@
-from constants import *
-import numpy as np
-from constants import ACTION_MAP
-class ReinforcementLearning():
-    def __init__(self, car, grass_track_rl, max_steps=1000):
-        self.car = car
-        self.grass_track_rl = grass_track_rl
-        self.current_step = 0
-        self.max_episode_steps = max_steps  # Define the maximum number of steps for training/testing
-        self.current_waypoint_index = 0
-        self.waypoints = grass_track_rl.checkpoints
-        self.prev_dist = self.car.get_sensor_distances(0)  # Initialize previous distance to None
-        self.observation_size = 8  # Define the size of the observation space
-        self.num_actions = len(ACTION_MAP)  # Number of discrete actions available
-    def train(self):
-        pass
+# from constants import *
+# import numpy as np
+# from constants import ACTION_MAP
+# class ReinforcementLearning():
+#     def __init__(self, car, grass_track_rl, max_steps=1000):
+#         self.car = car
+#         self.grass_track_rl = grass_track_rl
+#         self.current_step = 0
+#         self.max_episode_steps = max_steps  # Define the maximum number of steps for training/testing
+#         self.current_waypoint_index = 0
+#         self.waypoints = grass_track_rl.checkpoints
+#         self.prev_dist = self.car.get_sensor_distances(0)  # Initialize previous distance to None
+#         self.observation_size = 8  # Define the size of the observation space
+#         self.num_actions = len(ACTION_MAP)  # Number of discrete actions available
+#     def train(self):
+#         pass
 
-    def test(self):
-        # Implement the testing logic here
-        pass
+#     def test(self):
+#         # Implement the testing logic here
+#         pass
 
-    #verjetno ne rabim
-    def _get_observation(self):
-        # This function is identical to the Gymnasium version
-        # Collect all state information from your CarRL object and environment
-        if self.car:
-            car_pos = self.car.position
-            car_vel = self.car.speed
-            car_rot = self.car.rotation
+#     #verjetno ne rabim
+#     def _get_observation(self):
+#         # This function is identical to the Gymnasium version
+#         # Collect all state information from your CarRL object and environment
+#         if self.car:
+#             car_pos = self.car.position
+#             car_vel = self.car.speed
+#             car_rot = self.car.rotation
 
-            dist_arr = self.car.get_sensor_distances(self.current_waypoint_index)
-            dist = sum(dist_arr)
+#             dist_arr = self.car.get_sensor_distances(self.current_waypoint_index)
+#             dist = sum(dist_arr)
 
-            obs = np.array([
-                car_pos.x, car_pos.y, car_pos.z,
-                car_vel,
-                car_rot.x, car_rot.y, car_rot.z,
-                dist
-            ], dtype=np.float32)
-            return obs
-        return np.zeros(self.observation_size, dtype=np.float32)
+#             obs = np.array([
+#                 car_pos.x, car_pos.y, car_pos.z,
+#                 car_vel,
+#                 car_rot.x, car_rot.y, car_rot.z,
+#                 dist
+#             ], dtype=np.float32)
+#             return obs
+#         return np.zeros(self.observation_size, dtype=np.float32)
 
-    def _get_reward(self, old_dist):
-        # This function is identical to the Gymnasium version
-        reward = 0.0
-        if self.car and self.waypoints and self.current_waypoint_index < len(self.waypoints):
-            current_waypoint = self.waypoints[self.current_waypoint_index]
-            # Assume self.car.prev_position is updated in CarRL's update method
-            if hasattr(self.car, 'prev_position') and self.car.prev_position is not None:
-                new_dist_arr = self.car.get_sensor_distances(current_waypoint)
-                new_dist = sum(new_dist_arr)
-                reward += (old_dist - new_dist) * 0.1 # Reward for getting closer
-                self.prev_dist = new_dist
-                for dist in new_dist_arr:
-                    if dist < 0.1:
-                        reward += 10 
-                        #tuki je problem, ker naslednji reward bo pol ful slabsi
-                        self.current_waypoint_index += 1
-                        print(f"Passed waypoint {self.current_waypoint_index}")
+#     def _get_reward(self, old_dist):
+#         # This function is identical to the Gymnasium version
+#         reward = 0.0
+#         if self.car and self.waypoints and self.current_waypoint_index < len(self.waypoints):
+#             current_waypoint = self.waypoints[self.current_waypoint_index]
+#             # Assume self.car.prev_position is updated in CarRL's update method
+#             if hasattr(self.car, 'prev_position') and self.car.prev_position is not None:
+#                 new_dist_arr = self.car.get_sensor_distances(current_waypoint)
+#                 new_dist = sum(new_dist_arr)
+#                 reward += (old_dist - new_dist) * 0.1 # Reward for getting closer
+#                 self.prev_dist = new_dist
+#                 for dist in new_dist_arr:
+#                     if dist < 0.1:
+#                         reward += 10 
+#                         #tuki je problem, ker naslednji reward bo pol ful slabsi
+#                         self.current_waypoint_index += 1
+#                         print(f"Passed waypoint {self.current_waypoint_index}")
 
-        reward -= 0.04 # Time penalty
+#         reward -= 0.04 # Time penalty
 
-        return reward
+#         return reward
 
-    def _is_done(self):
-        # This function is identical to the Gymnasium version, but without `truncated`
-        done = False
+#     def _is_done(self):
+#         # This function is identical to the Gymnasium version, but without `truncated`
+#         done = False
 
-        # If max steps reached
-        if self.current_step >= self.max_episode_steps:
-            done = True
+#         # If max steps reached
+#         if self.current_step >= self.max_episode_steps:
+#             done = True
 
-        # If car completes lap
-        if self.current_waypoint_index >= len(self.waypoints):
-            print("All waypoints completed!")
-            done = True
-            # Final large reward can be added in _get_reward or here
+#         # If car completes lap
+#         if self.current_waypoint_index >= len(self.waypoints):
+#             print("All waypoints completed!")
+#             done = True
+#             # Final large reward can be added in _get_reward or here
 
-        return done
+#         return done
 
-    def reset(self):
-        # Reset car and environment state
+#     def reset(self):
+#         # Reset car and environment state
             
-        self.car.position = (-80, -30, 18.5)
-        self.car.rotation = (0, 90, 0)
-        self.car.visible = True
-        self.car.collision = False 
-        self.car.camera_follow = False         
-        self.car.speed = 0
-        self.car.velocity_y = 0
-        self.car.anti_cheat = 1
-        self.car.timer_running = True
-        self.car.count = 0.0
-        self.car.reset_count = 0.0
-        self.car.total_reward = 0
+#         self.car.position = (-80, -30, 18.5)
+#         self.car.rotation = (0, 90, 0)
+#         self.car.visible = True
+#         self.car.collision = False 
+#         self.car.camera_follow = False         
+#         self.car.speed = 0
+#         self.car.velocity_y = 0
+#         self.car.anti_cheat = 1
+#         self.car.timer_running = True
+#         self.car.count = 0.0
+#         self.car.reset_count = 0.0
+#         self.car.total_reward = 0
 
-        self.current_waypoint_index = 0
-        self.current_step = 0
+#         self.current_waypoint_index = 0
+#         self.current_step = 0
 
-        # Return initial observation
-        return self._get_observation()
+#         # Return initial observation
+#         return self._get_observation()
 
-    def step(self, action):
-        # Execute the action
-        self.car.execute_action(action)
+#     def step(self, action):
+#         # Execute the action
+#         self.car.execute_action(action)
 
-        # Increment step count
-        self.current_step += 1
+#         # Increment step count
+#         self.current_step += 1
 
-        # Get next observation, reward, and done status
-        observation = self._get_observation()
-        reward = self._get_reward(self.prev_dist)
-        done = self._is_done()
+#         # Get next observation, reward, and done status
+#         observation = self._get_observation()
+#         reward = self._get_reward(self.prev_dist)
+#         done = self._is_done()
 
-        # Return them
-        return observation, reward, done
+#         # Return them
+#         return observation, reward, done
 
-    def render(self):
-        # Ursina handles this automatically via app.run()
-        pass
+#     def render(self):
+#         # Ursina handles this automatically via app.run()
+#         pass
 
 
 '''2. The RL Agent Class (Conceptual)
@@ -130,6 +130,9 @@ import torch.optim as optim
 import random
 from collections import deque
 import time
+import numpy as np
+
+from constants import ACTION_MAP
 
 # Define your Neural Network
 class QNetwork(nn.Module):
@@ -146,8 +149,10 @@ class QNetwork(nn.Module):
 
 class DQNAgent:
     def __init__(self, observation_size, num_actions, learning_rate=0.001, gamma=0.99,
-                 epsilon_start=1.0, epsilon_end=0.01, epsilon_decay=0.995,
-                 batch_size=32, buffer_size=10000):
+                 epsilon_start=1, epsilon_end=0.01, epsilon_decay = 0.99995,
+                 batch_size=32, buffer_size=300000, load_path=None):
+    
+        
         self.observation_size = observation_size
         self.num_actions = num_actions
         self.gamma = gamma
@@ -168,6 +173,13 @@ class DQNAgent:
 
         self.current_step = 0
 
+        if load_path is not None:
+            try:
+                self.load_model(load_path)
+                print(f"✅ Loaded model from {load_path}")
+            except Exception as e:
+                print(f"⚠️ Could not load model from {load_path}: {e}")
+
     def choose_action(self, state):
         """
         Chooses an action using an epsilon-greedy policy based on the provided state dictionary.
@@ -182,7 +194,7 @@ class DQNAgent:
 
         if random.random() < self.epsilon:
             # Explore
-            return random.randint(0, self.num_actions - 1)
+            return random.randint(0, len(ACTION_MAP) - 1)
         else:
             # Exploit
             with torch.no_grad():
@@ -205,6 +217,8 @@ class DQNAgent:
         self.replay_buffer.append((state, action, reward, next_state, done))
 
     def learn(self):
+        if self.current_step % 100 == 0:
+            print(f"[Step {self.current_step}] Epsilon: {self.epsilon:.4f}")
         self.current_step += 1
         if len(self.replay_buffer) < self.batch_size:
             return
