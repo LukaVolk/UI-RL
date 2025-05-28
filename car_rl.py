@@ -560,10 +560,14 @@ class CarRL(Entity):
         # You can use ignore_entities in your raycasts like:
         # y_ray = raycast(origin=self.world_position, direction=(0, -1, 0), ignore=ignore_entities)
         # (To apply this, move the ignore_entities logic above the raycast if you want all raycasts to ignore Cars)
+        ignore_entities = [self]
+        for e in scene.entities:
+            if isinstance(e, CarRL) and e is not self:
+                ignore_entities.append(e)
 
 
         # Main raycast for collision
-        y_ray = raycast(origin = self.world_position, direction = (0, -1, 0), ignore = self.ignore_entities)
+        y_ray = raycast(origin = self.world_position, direction = (0, -1, 0), ignore = ignore_entities)
 
         if self.rl:
             if y_ray.distance <= 5:
@@ -797,13 +801,13 @@ class CarRL(Entity):
                 origin=self.world_position,
                 direction=self.forward,
                 distance=1,
-                ignore=self.ignore_entities
+                ignore=ignore_entities
             )
             wall_check_back = raycast(
                 origin=self.world_position,
                 direction=-self.forward,
                 distance=1,
-                ignore=self.ignore_entities
+                ignore=ignore_entities
             )
             if wall_check_front.hit or wall_check_back.hit:
                 wall_impact = 0
@@ -811,7 +815,7 @@ class CarRL(Entity):
                     wall_impact = abs(Vec3.dot(wall_check_front.world_normal, self.forward))
                 if wall_check_back.hit:
                     wall_impact = abs(Vec3.dot(wall_check_back.world_normal, -self.forward))
-                print(f"Wall impact: {wall_impact:.2f}")
+                #print(f"Wall impact: {wall_impact:.2f}")
                 if wall_impact > 0.5:  # Head-on collision
                     deceleration = 50 * time.dt * wall_impact
                     self.speed -= deceleration
@@ -864,14 +868,14 @@ class CarRL(Entity):
         # Collision Detection
         if movementX != 0:
             direction = (sign(movementX), 0, 0)
-            x_ray = raycast(origin = self.world_position, direction = direction, ignore = self.ignore_entities)
+            x_ray = raycast(origin = self.world_position, direction = direction, ignore = ignore_entities)
 
             if x_ray.distance > self.scale_x / 2 + abs(movementX):
                 self.x += movementX
 
         if movementZ != 0:
             direction = (0, 0, sign(movementZ))
-            z_ray = raycast(origin = self.world_position, direction = direction, ignore = self.ignore_entities)
+            z_ray = raycast(origin = self.world_position, direction = direction, ignore = ignore_entities)
 
             if z_ray.distance > self.scale_z / 2 + abs(movementZ):
                 self.z += movementZ
