@@ -172,7 +172,7 @@ class GrassTrackRL(Entity):
         return done
 
     def learning_process(self):
-        print(f"Episode: {self.current_episode}, Timer: {self.print_timer:.2f}")
+        #print(f"Episode: {self.current_episode}, Timer: {self.print_timer:.2f}")
         if self.print_timer >= self.episode_length and REINFORCEMENT_LEARNING:
             self.print_timer = 0
             self.current_episode += 1
@@ -289,7 +289,7 @@ class GrassTrackRL(Entity):
 
     def exploitation_process(self):
         #in this part we will use the trained model to control the car
-        print(f"Exploitation Phase - Episode: {self.current_episode}, Timer: {self.print_timer:.2f}")
+        #print(f"Exploitation Phase - Episode: {self.current_episode}, Timer: {self.print_timer:.2f}")
         if self.print_timer >= self.episode_length and REINFORCEMENT_LEARNING:
             self.print_timer = 0
             self.current_episode += 1

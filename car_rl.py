@@ -816,7 +816,7 @@ class CarRL(Entity):
                     deceleration = 50 * time.dt * wall_impact
                     self.speed -= deceleration
                     self.speed = max(self.speed, 2)
-                    print(f"Speed after collision: {self.speed:.2f}")
+                    #print(f"Speed after collision: {self.speed:.2f}")
                     self.wall_hit = True
                 else:
                     self.wall_hit = False
