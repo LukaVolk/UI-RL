@@ -3,6 +3,7 @@ from ursina import curve
 from particles import Particles, TrailRenderer
 import json
 from constants import ACTION_MAP, REINFORCEMENT_LEARNING,SHOW_SENSORS
+import numpy as np
 
 sign = lambda x: -1 if x < 0 else (1 if x > 0 else 0)
 Text.default_resolution = 1080 * Text.size
@@ -125,6 +126,8 @@ class CarRL(Entity):
         self.print_timer = 0
         self.next_checkpoint_index = 0
         self.prev_position = None
+        self.ignore_entities = []
+        self.max_track_distance_for_norm = None
 
         # Add reward tracking
         self.current_reward = 0
@@ -370,6 +373,136 @@ class CarRL(Entity):
         
         return state
     
+    def calculate_max_track_distance_for_norm(self, checkpoints):
+        if not checkpoints:
+            return 1.0  # Default sensible minimum if no checkpoints
+
+        max_dist = 0.0
+        # Iterate through all pairs of checkpoints
+        for i in range(len(checkpoints)):
+            for j in range(i + 1, len(checkpoints)):
+                pos1 = checkpoints[i].position
+                pos2 = checkpoints[j].position
+                # Assuming Vec3 objects support subtraction and .length()
+                dist = (pos1 - pos2).length()
+                if dist > max_dist:
+                    max_dist = dist
+
+        # Add a buffer: The car might be slightly off the direct line between checkpoints,
+        # or even further away if it's reset to a start position far from the first checkpoint.
+        # A buffer of 1.2 to 1.5 times the max_dist is often reasonable.
+        return max_dist * 1.2
+    
+    def get_state2(self, checkpoints):
+        """Get current state for RL model with improved features, adapted to car values.
+
+        Returns:
+            np.array: A flat NumPy array representing the state.
+                      (speed, vel_x, vel_z, rotation_yaw, rotation_pitch, rotation_roll,
+                       rotation_speed_y, dist_to_next_cp, angle_to_next_cp,
+                       sensor_distance_1, sensor_distance_2, ...)
+        """
+
+        if self.max_track_distance_for_norm is None:
+            # Calculate the maximum track distance for normalization
+            self.max_track_distance_for_norm = self.calculate_max_track_distance_for_norm(checkpoints)
+        # --- 1. Car Dynamics ---
+        # Normalized speed (scalar)
+        # self.speed can be negative if going backwards. Normalization to [-1, 1] is appropriate.
+        normalized_speed = self.speed / self.topspeed 
+
+        # Get normalized velocity components (x, z)
+        # Derived from car's forward direction and its current speed
+        # Using self.forward (Vec3) which is normalized, and self.speed (scalar)
+        current_velocity_vec = self.forward * self.speed
+        
+        # Max velocity component can be topspeed
+        max_vel_component_norm = self.topspeed 
+        normalized_vel_x = current_velocity_vec.x / max_vel_component_norm
+        normalized_vel_z = current_velocity_vec.z / max_vel_component_norm
+
+        # Car's Euler rotation angles (yaw, pitch, roll)
+        car_rotation_euler = self.rotation
+
+        # Normalize yaw (y-axis rotation, heading) from -180 to 180 degrees, then to -1 to 1.
+        normalized_yaw = car_rotation_euler.y / 180.0
+
+        # Pitch (x-axis rotation, nose up/down) and Roll (z-axis rotation, tilt sideways)
+        # Normalize by 90.0 as cars typically don't exceed +/- 90 degrees tilt/pitch in normal driving.
+        normalized_pitch = car_rotation_euler.x / 90.0
+        normalized_roll = car_rotation_euler.z / 90.0
+
+        # Normalized rotation speed (angular velocity around Y-axis)
+        # Using your defined self.max_rotation_speed for normalization.
+        # self.rotation_speed can be negative if turning left.
+        normalized_rotation_speed = self.rotation_speed / self.max_rotation_speed
+
+
+        # --- 2. Environment Interaction ---
+        normalized_dist_to_next_cp = 0.0
+        normalized_angle_to_next_cp = 0.0
+
+        if checkpoints and self.next_checkpoint_index < len(checkpoints):
+            # Get the position attribute of the Entity object for the next checkpoint
+            next_checkpoint_pos = checkpoints[self.next_checkpoint_index].position
+
+            # Vector from car to checkpoint
+            vec_to_cp = next_checkpoint_pos - self.position 
+
+            dist_to_next_cp = vec_to_cp.length()
+
+            # Normalize distance to checkpoint. Use a value that covers your largest track distances.
+            # self.max_track_distance_for_norm should be defined in your class
+            normalized_dist_to_next_cp = dist_to_next_cp / self.max_track_distance_for_norm
+
+            # Calculate angle between car's forward vector and vector to checkpoint
+            car_forward_vector = self.forward # self.forward is already a normalized Vec3
+
+            # Ensure the vector to checkpoint is not zero length to avoid division by zero
+            if vec_to_cp.length() > 0.01: # Small epsilon to handle being exactly on the checkpoint
+                normalized_vec_to_cp = vec_to_cp.normalized()
+
+                # Use atan2 for robust angle calculation (handles full 360 range)
+                # This calculation assumes a 2D projection (ignoring the Y-axis, which is typically 'up' in 3D game engines)
+                # It calculates the angle in the XZ plane.
+                angle_rad = math.atan2(car_forward_vector.x * normalized_vec_to_cp.z - car_forward_vector.z * normalized_vec_to_cp.x, 
+                                       car_forward_vector.x * normalized_vec_to_cp.x + car_forward_vector.z * normalized_vec_to_cp.z)
+
+                # Normalize angle from -pi to pi to -1 to 1
+                normalized_angle_to_next_cp = angle_rad / math.pi
+            else:
+                normalized_angle_to_next_cp = 0.0 # If at checkpoint, perfectly aligned
+        else:
+            # If no checkpoints left or end of track, provide default values (agent is "done" or lost)
+            normalized_dist_to_next_cp = 0.0
+            normalized_angle_to_next_cp = 0.0
+
+
+        # Get normalized sensor distances
+        sensor_distances = self.get_sensor_distances(self.next_checkpoint_index) 
+        normalized_distances = [d / self.sensor_length for d in sensor_distances]
+
+
+        # --- 3. Construct the flat state array ---
+        # Flatten all relevant features into a single NumPy array
+        # This order should be consistent for your neural network input layer.
+        state_list = [
+            normalized_speed,
+            normalized_vel_x,
+            normalized_vel_z,
+            normalized_yaw,
+            normalized_pitch,
+            normalized_roll,
+            normalized_rotation_speed,
+            normalized_dist_to_next_cp,
+            normalized_angle_to_next_cp,
+        ]
+        
+        # Extend with sensor distances (assuming this returns a list of floats)
+        state_list.extend(normalized_distances)
+
+        return np.array(state_list, dtype=np.float32)
+    
     def reset(self):
         # Reset car and environment state
             
@@ -385,6 +518,15 @@ class CarRL(Entity):
         self.count = 0.0
         self.reset_count = 0.0
         self.total_reward = 0
+
+    def ignore_other_cars(self):
+        """Ignore other cars in raycasts for collision detection"""
+        # Disable collision with other Car entities
+        # Find all Car instances and add them to the ignore list for raycasts
+        self.ignore_entities = [self]
+        for e in scene.entities:
+            if isinstance(e, CarRL) and e is not self:
+                self.ignore_entities.append(e)
 
     def update(self):
         # The y rotation distance between the car and the pivot
@@ -415,21 +557,13 @@ class CarRL(Entity):
         movementY = self.velocity_y / 50
         direction = (0, sign(movementY), 0)
 
-
-        # Disable collision with other Car entities
-        # Find all Car instances and add them to the ignore list for raycasts
-        ignore_entities = [self]
-        for e in scene.entities:
-            if isinstance(e, CarRL) and e is not self:
-                ignore_entities.append(e)
-
         # You can use ignore_entities in your raycasts like:
         # y_ray = raycast(origin=self.world_position, direction=(0, -1, 0), ignore=ignore_entities)
         # (To apply this, move the ignore_entities logic above the raycast if you want all raycasts to ignore Cars)
 
 
         # Main raycast for collision
-        y_ray = raycast(origin = self.world_position, direction = (0, -1, 0), ignore = ignore_entities)
+        y_ray = raycast(origin = self.world_position, direction = (0, -1, 0), ignore = self.ignore_entities)
 
         if self.rl:
             if y_ray.distance <= 5:
@@ -644,12 +778,18 @@ class CarRL(Entity):
         if self.y >= 300:
             self.reset_car()
 
+        # At the start of your update function
+        max_dt = 1 / 30  # e.g., clamp to 30 FPS
+        dt = min(time.dt, max_dt)
+        # Use 'dt' instead of 'time.dt' in all calculations
+
         # Rotation
         self.rotation_parent.position = self.position
 
+        factor = min(1, 20*time.dt)  # Clamp factor to avoid overshooting
         # Lerps the car's rotation to the rotation parent's rotation (Makes it smoother)
-        self.rotation_x = lerp(self.rotation_x, self.rotation_parent.rotation_x, 20 * time.dt)
-        self.rotation_z = lerp(self.rotation_z, self.rotation_parent.rotation_z, 20 * time.dt)
+        self.rotation_x = lerp(self.rotation_x, self.rotation_parent.rotation_x, factor)
+        self.rotation_z = lerp(self.rotation_z, self.rotation_parent.rotation_z, factor)
 
         # Check if car is hitting the ground
         if self.visible:
@@ -657,13 +797,13 @@ class CarRL(Entity):
                 origin=self.world_position,
                 direction=self.forward,
                 distance=1,
-                ignore=[self]
+                ignore=self.ignore_entities
             )
             wall_check_back = raycast(
                 origin=self.world_position,
                 direction=-self.forward,
                 distance=1,
-                ignore=[self]
+                ignore=self.ignore_entities
             )
             if wall_check_front.hit or wall_check_back.hit:
                 wall_impact = 0
@@ -724,14 +864,14 @@ class CarRL(Entity):
         # Collision Detection
         if movementX != 0:
             direction = (sign(movementX), 0, 0)
-            x_ray = raycast(origin = self.world_position, direction = direction, ignore = ignore_entities)
+            x_ray = raycast(origin = self.world_position, direction = direction, ignore = self.ignore_entities)
 
             if x_ray.distance > self.scale_x / 2 + abs(movementX):
                 self.x += movementX
 
         if movementZ != 0:
             direction = (0, 0, sign(movementZ))
-            z_ray = raycast(origin = self.world_position, direction = direction, ignore = ignore_entities)
+            z_ray = raycast(origin = self.world_position, direction = direction, ignore = self.ignore_entities)
 
             if z_ray.distance > self.scale_z / 2 + abs(movementZ):
                 self.z += movementZ

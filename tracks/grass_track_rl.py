@@ -20,7 +20,7 @@ class GrassTrackRL(Entity):
 
         self.action_interval = ACTION_INTERVAL
 
-        self.DQNAgent = DQNAgent(observation_size=10, num_actions=len(ACTION_MAP))
+        self.DQNAgent = DQNAgent(observation_size=OBESERVATION_SIZE, num_actions=len(ACTION_MAP))
         self.num_of_episodes = EPISODE_NUMBERS
         self.current_episode = 0
         self.episode_length = EPISODE_LENGTH
@@ -261,7 +261,7 @@ class GrassTrackRL(Entity):
                     # if hasattr(self.car, "give_bonus_reward"):
                     #     self.car.give_bonus_reward(i)
         
-            state = car.get_state()
+            state = car.get_state2(self.checkpoints)
             action = None
             # Random action for reinforcement learning
             if car.rl and self.enabled and car.visible:
@@ -273,7 +273,7 @@ class GrassTrackRL(Entity):
 
             
             reward = car.total_reward if hasattr(car, 'total_reward') else 0
-            next_state = car.get_state()
+            next_state = car.get_state2(self.checkpoints)
             done = self._is_done(car)
 
             #print(f"Action: {action}, Reward: {reward}, State: {state}")
@@ -376,7 +376,7 @@ class GrassTrackRL(Entity):
                     # Give bonus for reinforcement learning
                     # if hasattr(self.car, "give_bonus_reward"):
                     #     self.car.give_bonus_reward(i)
-            state = car.get_state()
+            state = car.get_state2(self.checkpoints)
             action = None
             # Use DQN agent to get action
             if car.rl and self.enabled and car.visible:
@@ -387,7 +387,7 @@ class GrassTrackRL(Entity):
                     car.execute_action(action)
             
             reward = car.total_reward if hasattr(car, 'total_reward') else 0
-            next_state = car.get_state()
+            next_state = car.get_state2(self.checkpoints)
             done = self._is_done(car)
             #print(f"Action: {action}, Reward: {reward}, State: {state}")
             #store experience

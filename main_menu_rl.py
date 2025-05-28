@@ -227,6 +227,7 @@ class MainMenuRL(Entity):
                 car.last_count = 0.0
                 car.reset_count = 0.0
                 car.laps = 0
+                car.ignore_other_cars()
             self.start_menu.enable()
             self.pause_menu.disable()
             for track in self.tracks:

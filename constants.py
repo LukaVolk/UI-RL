@@ -1,4 +1,4 @@
-CAR_INSTANCES = 15
+CAR_INSTANCES = 5
 REINFORCEMENT_LEARNING = True
 SHOW_CHECKPOINTS = True
 SHOW_WALLS = False
@@ -7,9 +7,10 @@ SHOW_SENSORS = False
 CHECKPOINT_WIDTH = 50
 
 #Reinforcement Learning Constants
-EPISODE_LENGTH = 30
-EPISODE_NUMBERS = 10
-ACTION_INTERVAL = 0.1 # Time interval between actions in seconds
+EPISODE_LENGTH = 5
+EPISODE_NUMBERS = 5
+ACTION_INTERVAL = 0.2 # Time interval between actions in seconds
+OBESERVATION_SIZE = 9+5 # Number of sensors + speed + angle + distance to next checkpoint
 
 # SCORING
 # Checkpoint rewards

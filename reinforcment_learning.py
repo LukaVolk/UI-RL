@@ -178,21 +178,15 @@ class DQNAgent:
             action (int): The chosen action index.
         """
 
-        # Flatten the state dict into a numpy array
-        state_vec = np.array([
-            state['speed'],
-            *state['distances'],
-            state['total_reward'],
-            state['next_checkpoint'],
-            state['rotation_speed']
-        ], dtype=np.float32)
-        
+        state_vec = state # The input 'state' is already the np.array from get_state
+
         if random.random() < self.epsilon:
             # Explore
             return random.randint(0, self.num_actions - 1)
         else:
             # Exploit
             with torch.no_grad():
+                # Add a batch dimension (unsqueeze(0)) because the network expects a batch
                 obs_tensor = torch.tensor(state_vec, dtype=torch.float32).unsqueeze(0)
                 q_values = self.q_network(obs_tensor)
                 return q_values.argmax().item()
