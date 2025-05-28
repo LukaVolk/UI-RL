@@ -1,10 +1,16 @@
-CAR_INSTANCES = 1
-REINFORCEMENT_LEARNING = False
+CAR_INSTANCES = 5
+REINFORCEMENT_LEARNING = True
 SHOW_CHECKPOINTS = True
 SHOW_WALLS = False
 SHOW_BOUNDRIES = False
 SHOW_SENSORS = False
 CHECKPOINT_WIDTH = 50
+
+#Reinforcement Learning Constants
+EPISODE_LENGTH = 5
+EPISODE_NUMBERS = 5
+ACTION_INTERVAL = 0.1 # Time interval between actions in seconds
+OBESERVATION_SIZE = 9+5 # Number of sensors + speed + angle + distance to next checkpoint
 
 # SCORING
 # Checkpoint rewards
@@ -26,5 +32,7 @@ ACTION_MAP = {
     2: ['forward', 'left'],
     3: ['forward', 'right'],
     4: ['back'],
-    5: ['handbrake']
+    5: ['handbrake'],
+    6: ['left'],
+    7: ['right']
 }

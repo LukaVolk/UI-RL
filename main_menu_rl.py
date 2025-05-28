@@ -1,6 +1,7 @@
 from ursina import *
 from ursina import curve
 import os
+from reinforcment_learning import ReinforcementLearning, DQNAgent
 
 
 
@@ -132,7 +133,6 @@ class MainMenuRL(Entity):
             cars = []
             
             for i, rl_car in enumerate(self.cars):
-                
                 rl_car.position = (-80, -30, 18.5)
                 rl_car.rotation = (0, 90, 0)
                 rl_car.visible = True
@@ -142,43 +142,81 @@ class MainMenuRL(Entity):
                 rl_car.speed = 0
                 rl_car.velocity_y = 0
                 rl_car.anti_cheat = 1
-                rl_car.timer_running = False
+                rl_car.timer_running = True
                 rl_car.count = 0.0
                 rl_car.reset_count = 0.0
                 rl_car.total_reward = 0
+                rl_car.grass_track_rl = grass_track_rl
             
             for rl_car in cars:
                 rl_car.update()
-            #for _ in range(100):
-            #    if learn is not None:
-            #        cars = learn.cars
-            #        for car in cars:
-            #            car.position = (-80, -30, 18.5) + (random.randint(-2, 2), random.randint(-2, 2), random.randint(-2, 2))
-            #            car.rotation = (0, 90, 0)
-            #            car.visible = True
-            #    else:
-            #        cars = []
-            #        for rl_car in range(10):
-            #            car = Car()
-            #            car.position = (-80, -30, 18.5) + (random.randint(-2, 2), random.randint(-2, 2), random.randint(-2, 2))
-            #            car.rotation = (0, 90, 0)
-            #            car.visible = True
-            #            cars.append(car)
-            #    
-            #    time.sleep(10)
-            #
-            #    rl = ReinforcementLearning(cars, grass_track)
-            #    learn = rl.start()
+
             grass_track_rl.played = True
             for g in grass_track_rl.track:
                 g.enable()
                 g.alpha = 255
+
+            grass_track_rl.is_learning = True
+            '''
+            time.sleep(3) 
+            for _ in range(5):
+
+                env = ReinforcementLearning(cars[0], grass_track_rl)
+                agent = DQNAgent(observation_size=env.observation_size, num_actions=env.num_actions)
+
+                num_episodes = 1000 # Number of training episodes
+
+                # Ursina's update function to handle game logic and RL steps
+                # We'll put the core RL step logic here, to synchronize with Ursina's framerate
+                # Or, for fixed steps, you'd call application.step() multiple times inside your RL loop
+                global_episode_reward = 0
+                global_episode_steps = 0
+                current_obs = None # Store the current observation globally
+                episode_ended = False # Flag to manage episode resets
+                for i in range(num_episodes):
+
+                    if episode_ended: # If last episode ended, reset
+                        current_obs = env.reset()
+                        global_episode_reward = 0
+                        global_episode_steps = 0
+                        episode_ended = False
+
+                    # Agent chooses an action
+                    action = agent.choose_action(current_obs)
+
+                    # Environment steps based on action
+                    next_obs, reward, done = env.step(action)
+
+                    # Store experience
+                    agent.store_experience(current_obs, action, reward, next_obs, done)
+
+                    # Agent learns
+                    agent.learn()
+
+                    global_episode_reward += reward
+                    global_episode_steps += 1
+                    current_obs = next_obs # Update current observation
+
+                    if done:
+                        print(f"Episode {env.current_step}: Total Reward = {global_episode_reward:.2f}, Steps = {global_episode_steps}")
+                        episode_ended = True # Set flag to reset on next update_rl_step
+
+                # Start the first episode
+                current_obs = env.reset()
+                env.current_episode = 0 # Track episodes manually
+            '''
 
         #Reinforcement Learning Menu
         reinforcment_learning_button = Button(text = "Reinforcement Learning", color = color.gray, highlight_color = color.light_gray, scale_y = 0.1, scale_x = 0.3, y = -0.21, parent = self.start_menu)
         reinforcment_learning_button.on_click = Func(grass_track_func_ai)
 
         def main_menu():
+            grass_track_rl.is_learning = False
+            grass_track_rl.is_reinforcement_learning = False
+            grass_track_rl.print_timer = 0
+            grass_track_rl.timer_running = False
+            grass_track_rl.timer.disable()
+            grass_track_rl.episode.disable()
             for car in self.cars:
                 car.visible = False
                 car.position = (0, 0, 4)
@@ -189,6 +227,7 @@ class MainMenuRL(Entity):
                 car.last_count = 0.0
                 car.reset_count = 0.0
                 car.laps = 0
+                car.ignore_other_cars()
             self.start_menu.enable()
             self.pause_menu.disable()
             for track in self.tracks:

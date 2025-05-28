@@ -3,6 +3,7 @@ from ursina import curve
 from particles import Particles, TrailRenderer
 import json
 from constants import ACTION_MAP, REINFORCEMENT_LEARNING,SHOW_SENSORS
+import numpy as np
 
 sign = lambda x: -1 if x < 0 else (1 if x > 0 else 0)
 Text.default_resolution = 1080 * Text.size
@@ -17,7 +18,7 @@ class CarRL(Entity):
             rotation = rotation,
         )
 
-        self.grass_track_rl = True
+        self.grass_track_rl = False
 
         # Rotation parent
         self.rotation_parent = Entity()
@@ -100,39 +101,12 @@ class CarRL(Entity):
 
         # Graphics
         self.graphics = "fancy"
-
-        # Stopwatch/Timer
-        self.timer_running = False
-        self.count = 0.0
-        self.highscore_count = None
-        self.last_count = self.count
-        self.reset_count = 0.0
-        self.timer = Text(text = "", origin = (0, 0), size = 0.05, scale = (1, 1), position = (-0.7, 0.43))
-        self.highscore = Text(text = "", origin = (0, 0), size = 0.05, scale = (0.6, 0.6), position = (-0.7, 0.38))
-        self.laps_text = Text(text = "", origin = (0, 0), size = 0.05, scale = (1.1, 1.1), position = (0, 0.43))
-        self.reset_count_timer = Text(text = str(round(self.reset_count, 1)), origin = (0, 0), size = 0.05, scale = (1, 1), position = (-0.7, 0.43))
         
-        self.timer.disable()
-        self.highscore.disable()
-        self.laps_text.disable()
-        self.reset_count_timer.disable()
-
         self.gamemode = "race"
         self.start_time = False
         self.laps = 0
         self.laps_hs = 0
         self.anti_cheat = 1
-
-        # Drift Gamemode
-        self.drift_text = Text(text = "", origin = (0, 0), color = color.white, size = 0.05, scale = (1.1, 1.1), position = (0, 0.43), visible = False)
-        self.drift_timer = Text(text = "", origin = (0, 0), size = 0.05, scale = (1, 1), position = (0.7, 0.43))
-        self.start_drift = False
-        self.drift_score = 0
-        self.drift_time = 0
-        self.drift_multiplier = 20
-        self.get_hundred = False
-        self.get_thousand = False
-        self.get_fivethousand = False
 
         # Bools
         self.driving = False
@@ -151,6 +125,9 @@ class CarRL(Entity):
         self.ai_cars = []
         self.print_timer = 0
         self.next_checkpoint_index = 0
+        self.prev_position = None
+        self.ignore_entities = []
+        self.max_track_distance_for_norm = None
 
         # Add reward tracking
         self.current_reward = 0
@@ -165,70 +142,12 @@ class CarRL(Entity):
             'handbrake': False
         }
 
+        self.action_queue = []
+
         # Car sensors
         self.show_sensors = SHOW_SENSORS
         self.sensor_rays = []
         self.sensor_length = 100
-
-        # Shows whether you are connected to a server or not
-        self.connected_text = True
-        self.disconnected_text = True
-
-        # Get highscore from json file
-        path = os.path.dirname(sys.argv[0])
-        self.highscore_path = os.path.join(path, "./highscore/highscore.json")
-        
-        try:
-            with open(self.highscore_path, "r") as hs:
-                self.highscores = json.load(hs)
-        except FileNotFoundError:
-            with open(self.highscore_path, "w+") as hs:
-                self.reset_highscore()
-                self.highscores = json.load(hs)
-
-        self.sand_track_hs = self.highscores["race"]["sand_track"]
-        self.grass_track_hs = self.highscores["race"]["grass_track"]
-        self.snow_track_hs = self.highscores["race"]["snow_track"]
-        self.forest_track_hs = self.highscores["race"]["forest_track"]
-        self.savannah_track_hs = self.highscores["race"]["savannah_track"]
-        self.lake_track_hs = self.highscores["race"]["lake_track"]
-
-        self.sand_track_laps = self.highscores["time_trial"]["sand_track"]
-        self.grass_track_laps = self.highscores["time_trial"]["grass_track"]
-        self.snow_track_laps = self.highscores["time_trial"]["snow_track"]
-        self.forest_track_laps = self.highscores["time_trial"]["forest_track"]
-        self.savannah_track_laps = self.highscores["time_trial"]["savannah_track"]
-        self.lake_track_laps = self.highscores["time_trial"]["lake_track"]
-
-        self.sand_track_drift = self.highscores["drift"]["sand_track"]
-        self.grass_track_drift = self.highscores["drift"]["grass_track"]
-        self.snow_track_drift = self.highscores["drift"]["snow_track"]
-        self.forest_track_drift = self.highscores["drift"]["forest_track"]
-        self.savannah_track_drift = self.highscores["drift"]["savannah_track"]
-        self.lake_track_drift = self.highscores["drift"]["lake_track"]
-
-        self.highscore_count = self.sand_track_hs
-        self.highscore_count = float(self.highscore_count)
-
-        self.username_path = os.path.join(path, "./highscore/username.txt")
-        with open(self.username_path, "r") as username:
-            self.username_text = username.read()
-
-        self.unlocked_json = os.path.join(path, "./highscore/unlocked.json")
-        try:
-            with open(self.unlocked_json, "r") as u:
-                self.unlocked = json.load(u)
-        except FileNotFoundError:
-            with open(self.unlocked_json, "w+") as u:
-                self.save_unlocked()
-                self.unlocked = json.load(u)
-
-        self.beat_mandaw_sand_track = False
-        self.beat_mandaw_grass_track = False
-        self.beat_mandaw_snow_track = False
-        self.beat_mandaw_forest_track = False
-        self.beat_mandaw_savannah_track = False
-        self.beat_mandaw_lake_track = False
 
         # Show sensors
         if self.show_sensors and self.gamemode == "race":
@@ -239,7 +158,6 @@ class CarRL(Entity):
 
         self.model_path = str(self.model).replace("render/scene/car/", "")
 
-        invoke(self.set_unlocked, delay = 1)
         invoke(self.update_model_path, delay = 3)
 
     def sports_car(self):
@@ -360,6 +278,8 @@ class CarRL(Entity):
         3: Forward + Right
         4: Brake
         5: Handbrakes
+        6: Left
+        7: Right
         """
         self.input_states = {k: False for k in self.input_states}
         for key in ACTION_MAP.get(action, []):
@@ -378,12 +298,11 @@ class CarRL(Entity):
         ]
         
         distances = []
-        
+
         for i, direction in enumerate(directions):
             # Rotate direction based on car's rotation
             rotated_direction = self.forward * direction[2] + self.right * direction[0]
             
-            # Cast ray
             ray = raycast(
                 origin=self.world_position,
                 direction=rotated_direction,
@@ -443,105 +362,53 @@ class CarRL(Entity):
         }
         
         return state
+    
+    def calculate_max_track_distance_for_norm(self, checkpoints):
+        if not checkpoints:
+            return 1.0  # Default sensible minimum if no checkpoints
+
+        max_dist = 0.0
+        # Iterate through all pairs of checkpoints
+        for i in range(len(checkpoints)):
+            for j in range(i + 1, len(checkpoints)):
+                pos1 = checkpoints[i].position
+                pos2 = checkpoints[j].position
+                # Assuming Vec3 objects support subtraction and .length()
+                dist = (pos1 - pos2).length()
+                if dist > max_dist:
+                    max_dist = dist
+
+        # Add a buffer: The car might be slightly off the direct line between checkpoints,
+        # or even further away if it's reset to a start position far from the first checkpoint.
+        # A buffer of 1.2 to 1.5 times the max_dist is often reasonable.
+        return max_dist * 1.2
+    
+    def reset(self):
+        # Reset car and environment state
+            
+        self.position = (-80, -30, 18.5)
+        self.rotation = (0, 90, 0)
+        self.visible = True
+        self.collision = False 
+        self.camera_follow = False         
+        self.speed = 0
+        self.velocity_y = 0
+        self.anti_cheat = 1
+        #self.timer_running = True
+        self.count = 0.0
+        self.reset_count = 0.0
+        self.total_reward = 0
+
+    def ignore_other_cars(self):
+        """Ignore other cars in raycasts for collision detection"""
+        # Disable collision with other Car entities
+        # Find all Car instances and add them to the ignore list for raycasts
+        self.ignore_entities = [self]
+        for e in scene.entities:
+            if isinstance(e, CarRL) and e is not self:
+                self.ignore_entities.append(e)
 
     def update(self):
-        # Stopwatch/Timer
-        # Race Gamemode
-        if self.gamemode == "race":
-            self.print_timer += time.dt  # Add elapsed time
-            if self.print_timer >= 5:
-                self.print_timer = 0
-                #print(self.get_sensor_distances())
-            self.get_sensor_distances()
-            self.highscore.text = str(round(self.highscore_count, 1))
-            self.laps_text.disable()
-            if self.timer_running:
-                self.count += time.dt
-                self.reset_count += time.dt
-        # Time Trial Gamemode
-        elif self.gamemode == "time trial":
-            self.highscore.text = str(self.laps_hs)
-            self.laps_text.text = str(self.laps)
-            if self.timer_running:
-                self.count -= time.dt
-                self.reset_count -= time.dt
-                if self.count <= 0.0:
-                    self.count = 100.0
-                    self.reset_count = 100.0
-                    self.timer_running = False
-
-                    if self.laps >= self.laps_hs:
-                        self.laps_hs = self.laps
-
-                    self.laps = 0
-
-                    if self.sand_track.enabled:
-                        self.sand_track_laps = self.laps_hs
-                    elif self.grass_track.enabled:
-                        self.grass_track_laps = self.laps_hs
-                    elif self.snow_track.enabled:
-                        self.snow_track_laps = self.laps_hs
-                    elif self.forest_track.enabled:
-                        self.forest_track_laps = self.laps_hs
-                    elif self.savannah_track.enabled:
-                        self.savannah_track_laps = self.laps_hs
-                    elif self.lake_track.enabled:
-                        self.lake_track_laps = self.laps_hs
-
-                    self.start_time = False
-
-                    self.save_highscore()
-                    self.reset_car()
-        # Drift Gamemode
-        elif self.gamemode == "drift":
-            self.timer.text = str(int(self.drift_score))
-            self.drift_text.text = str(int(self.count))
-            self.drift_timer.text = str(float(round(self.drift_time, 1)))
-            self.laps_text.disable()
-            if self.timer_running:
-                self.drift_time -= time.dt
-                if self.drifting and held_keys["w"]:
-                    self.count += self.drift_multiplier * time.dt
-                    self.drift_multiplier += time.dt * 10
-                    self.start_drift = True
-                    self.drift_text.visible = True
-                    self.drift_text.x = 0
-
-                    if abs(100 - self.count) <= 5 or abs(200 - self.count) <= 20:
-                        if not self.get_hundred:
-                            self.animate_text(self.drift_text, 1.7, 1.1)
-                            self.get_hundred = True
-                    if abs(1000 - self.count) <= 10 or abs(2000 - self.count) <= 50:
-                        if not self.get_thousand:
-                            self.animate_text(self.drift_text, 1.7, 1.1)
-                            self.get_thousand = True
-                    if abs(5000 - self.count) <= 20 or abs(10000 - self.count) <= 100:
-                        if not self.get_fivethousand:
-                            self.animate_text(self.drift_text, 1.7, 1.1)
-                            self.get_fivethousand = True
-
-                    if self.count >= 100 and self.count < 1000:
-                        self.drift_text.color = color.hex("#6eb1ff")
-                    elif self.count >= 1000 and self.count < 5000:
-                        self.drift_text.color = color.gold
-                    elif self.count >= 5000:
-                        self.drift_text.color = color.red
-                    else:
-                        self.drift_text.color = color.white
-                else:
-                    if self.start_drift:
-                        self.reset_drift()
-                        self.start_drift = False
-                if self.drift_time <= 0:
-                    self.drift_timer.shake()
-                    self.reset_car()
-
-        if self.gamemode != "drift":
-            self.timer.text = str(round(self.count, 1))
-            self.reset_count_timer.text = str(round(self.reset_count, 1))
-        else:
-            self.reset_count_timer.text = str(int(self.reset_count))
-
         # The y rotation distance between the car and the pivot
         self.pivot_rotation_distance = (self.rotation_y - self.pivot.rotation_y)
 
@@ -569,8 +436,6 @@ class CarRL(Entity):
         # Gravity
         movementY = self.velocity_y / 50
         direction = (0, sign(movementY), 0)
-
-
         # Disable collision with other Car entities
         # Find all Car instances and add them to the ignore list for raycasts
         ignore_entities = [self]
@@ -826,7 +691,7 @@ class CarRL(Entity):
                     wall_impact = abs(Vec3.dot(wall_check_front.world_normal, self.forward))
                 if wall_check_back.hit:
                     wall_impact = abs(Vec3.dot(wall_check_back.world_normal, -self.forward))
-                #print(f"Wall impact: {wall_impact:.2f}")
+                print(f"Wall impact: {wall_impact:.2f}")
                 if wall_impact > 0.5:  # Head-on collision
                     deceleration = 50 * time.dt * wall_impact
                     self.speed -= deceleration
@@ -924,20 +789,6 @@ class CarRL(Entity):
         self.speed = 0
         self.velocity_y = 0
         self.anti_cheat = 1
-        self.timer_running = False
-        if self.gamemode == "race":
-            self.count = 0.0
-            self.reset_count = 0.0
-        elif self.gamemode == "time trial":
-            self.count = 100.0
-            self.reset_count = 100.0
-            self.laps = 0
-            self.start_time = False
-        elif self.gamemode == "drift":
-            self.reset_drift_score()
-        for trail in self.trails:
-            if trail.trailing:
-                trail.end_trail()
         self.start_trail = True
         self.start_sound = True
         if self.audio:
@@ -970,316 +821,6 @@ class CarRL(Entity):
             (minYA <= maxYB and maxYA >= minYB) and
             (minZA <= maxZB and maxZA >= minZB)
         )
-
-    def check_highscore(self):
-        """
-        Checks if the score is lower than the highscore
-        """
-        if self.gamemode == "race":
-            self.last_count = self.count
-            self.reset_count = 0.0
-            self.timer.disable()
-            self.reset_count_timer.enable()
-
-            if self.highscore_count == 0:
-                if self.last_count >= 5:
-                    self.highscore_count = self.last_count
-                    self.animate_text(self.highscore)
-            if self.last_count <= self.highscore_count and self.last_count != 0:
-                if self.last_count >= 5:
-                    self.highscore_count = self.last_count
-                    self.animate_text(self.highscore)
-                if self.highscore_count <= 6:
-                    self.highscore_count = self.last_count
-                    self.animate_text(self.highscore)
-
-            #if self.sand_track.enabled:
-            #    self.sand_track_hs = float(self.highscore_count)
-            #elif self.grass_track.enabled:
-            #    self.grass_track_hs = float(self.highscore_count)
-            #elif self.snow_track.enabled:
-            #    self.snow_track_hs = float(self.highscore_count)
-            #elif self.forest_track.enabled:
-            #    self.forest_track_hs = float(self.highscore_count)
-            #elif self.savannah_track.enabled:
-            #    self.savannah_track_hs = float(self.highscore_count)
-            #elif self.lake_track.enabled:
-            #    self.lake_track_hs = float(self.highscore_count)
-            #self.save_highscore()
-
-        elif self.gamemode == "time trial":
-            self.last_count = self.count
-            if self.start_time:
-                self.laps += 1
-                self.animate_text(self.laps_text, 1.7, 1.1)
-            self.start_time = True
-
-        elif self.gamemode == "drift":
-            self.drift_score += self.count
-
-            if self.drift_score >= self.highscore_count:
-                self.highscore_count = self.drift_score
-                if self.highscore_count != 0:
-                    self.animate_text(self.highscore)
-
-            self.reset_count = self.drift_score
-            self.reset_count_timer.enable()
-            self.timer.disable()
-            invoke(self.reset_count_timer.disable, delay = 3)
-            invoke(self.timer.enable, delay = 3)
-
-            self.reset_drift_score()
-            
-            self.highscore.text = str(int(self.highscore_count))
-            
-            #if self.sand_track.enabled:
-            #    self.sand_track_drift = int(self.highscore_count)
-            #elif self.grass_track.enabled:
-            #    self.grass_track_drift = int(self.highscore_count)
-            #elif self.snow_track.enabled:
-            #    self.snow_track_drift = int(self.highscore_count)
-            #elif self.forest_track.enabled:
-            #    self.forest_track_drift = int(self.highscore_count)
-            #elif self.savannah_track.enabled:
-            #    self.savannah_track_drift = int(self.highscore_count)
-            #elif self.lake_track.enabled:
-            #    self.lake_track_drift = int(self.highscore_count)
-
-            self.save_highscore()
-
-    def save_highscore(self):
-        """
-        Saves the highscore to a json file
-        """
-        self.highscore_dict = {
-            "race": {
-                "sand_track": self.sand_track_hs,
-                "grass_track": self.grass_track_hs,
-                "snow_track": self.snow_track_hs,
-                "forest_track": self.forest_track_hs,
-                "savannah_track": self.savannah_track_hs,
-                "lake_track": self.lake_track_hs
-            },
-            
-            "time_trial": {
-                "sand_track": self.sand_track_laps,
-                "grass_track": self.grass_track_laps, 
-                "snow_track": self.snow_track_laps, 
-                "forest_track": self.forest_track_laps,
-                "savannah_track": self.savannah_track_laps,
-                "lake_track": self.lake_track_laps
-            },
-
-            "drift": {
-                "sand_track": self.sand_track_drift,
-                "grass_track": self.grass_track_drift, 
-                "snow_track": self.snow_track_drift, 
-                "forest_track": self.forest_track_drift,
-                "savannah_track": self.savannah_track_drift,
-                "lake_track": self.lake_track_drift
-            }
-        }
-
-        with open(self.highscore_path, "w") as hs:
-            json.dump(self.highscore_dict, hs, indent = 4)
-
-    def reset_highscore(self):
-        """
-        Resets all of the highscores
-        """
-        self.sand_track_hs = 0.0
-        self.grass_track_hs = 0.0
-        self.snow_track_hs = 0.0
-        self.forest_track_hs = 0.0
-        self.savannah_track_hs = 0.0
-        self.lake_track_hs = 0.0
-
-        self.sand_track_laps = 0
-        self.grass_track_laps = 0
-        self.snow_track_laps = 0
-        self.forest_track_laps = 0
-        self.savannah_track_laps = 0
-        self.lake_track_laps = 0
-
-        self.sand_track_drift = 0.0
-        self.grass_track_drift = 0.0
-        self.snow_track_drift = 0.0
-        self.forest_track_drift = 0.0
-        self.savannah_track_drift = 0.0
-        self.lake_track_drift = 0.0
-
-        self.save_highscore()
-
-    def set_unlocked(self):
-        """
-        Declares variables with data from a json file
-        """
-
-       #self.grass_track_rl.unlocked = True
-
-        self.beat_mandaw_sand_track = self.unlocked["beat_mandaw"]["sand_track"]
-        self.beat_mandaw_grass_track = self.unlocked["beat_mandaw"]["grass_track"]
-        self.beat_mandaw_snow_track = self.unlocked["beat_mandaw"]["snow_track"]
-        self.beat_mandaw_forest_track = self.unlocked["beat_mandaw"]["forest_track"]
-        self.beat_mandaw_savannah_track = self.unlocked["beat_mandaw"]["savannah_track"]
-        self.beat_mandaw_lake_track = self.unlocked["beat_mandaw"]["lake_track"]
-
-        self.sports_unlocked = self.unlocked["cars"]["sports_car"]
-        self.muscle_unlocked = self.unlocked["cars"]["muscle_car"]
-        self.limo_unlocked = self.unlocked["cars"]["limo"]
-        self.lorry_unlocked = self.unlocked["cars"]["lorry"]
-        self.hatchback_unlocked = self.unlocked["cars"]["hatchback"]
-        self.rally_unlocked = self.unlocked["cars"]["rally_car"]
-
-        self.sports_red_unlocked = self.unlocked["textures"]["sports_car"]["red"]
-        self.sports_blue_unlocked = self.unlocked["textures"]["sports_car"]["blue"]
-        self.sports_green_unlocked = self.unlocked["textures"]["sports_car"]["green"]
-        self.sports_orange_unlocked = self.unlocked["textures"]["sports_car"]["orange"]
-        self.sports_black_unlocked = self.unlocked["textures"]["sports_car"]["black"]
-        self.sports_white_unlocked = self.unlocked["textures"]["sports_car"]["white"]
-
-        self.muscle_red_unlocked = self.unlocked["textures"]["muscle_car"]["red"]
-        self.muscle_blue_unlocked = self.unlocked["textures"]["muscle_car"]["blue"]
-        self.muscle_green_unlocked = self.unlocked["textures"]["muscle_car"]["green"]
-        self.muscle_orange_unlocked = self.unlocked["textures"]["muscle_car"]["orange"]
-        self.muscle_black_unlocked = self.unlocked["textures"]["muscle_car"]["black"]
-        self.muscle_white_unlocked = self.unlocked["textures"]["muscle_car"]["white"]
-
-        self.limo_red_unlocked = self.unlocked["textures"]["limo"]["red"]
-        self.limo_blue_unlocked = self.unlocked["textures"]["limo"]["blue"]
-        self.limo_green_unlocked = self.unlocked["textures"]["limo"]["green"]
-        self.limo_orange_unlocked = self.unlocked["textures"]["limo"]["orange"]
-        self.limo_black_unlocked = self.unlocked["textures"]["limo"]["black"]
-        self.limo_white_unlocked = self.unlocked["textures"]["limo"]["white"]
-
-        self.lorry_red_unlocked = self.unlocked["textures"]["lorry"]["red"]
-        self.lorry_blue_unlocked = self.unlocked["textures"]["lorry"]["blue"]
-        self.lorry_green_unlocked = self.unlocked["textures"]["lorry"]["green"]
-        self.lorry_orange_unlocked = self.unlocked["textures"]["lorry"]["orange"]
-        self.lorry_black_unlocked = self.unlocked["textures"]["lorry"]["black"]
-        self.lorry_white_unlocked = self.unlocked["textures"]["lorry"]["white"]
-
-        self.hatchback_red_unlocked = self.unlocked["textures"]["hatchback"]["red"]
-        self.hatchback_blue_unlocked = self.unlocked["textures"]["hatchback"]["blue"]
-        self.hatchback_green_unlocked = self.unlocked["textures"]["hatchback"]["green"]
-        self.hatchback_orange_unlocked = self.unlocked["textures"]["hatchback"]["orange"]
-        self.hatchback_black_unlocked = self.unlocked["textures"]["hatchback"]["black"]
-        self.hatchback_white_unlocked = self.unlocked["textures"]["hatchback"]["white"]
-
-        self.rally_red_unlocked = self.unlocked["textures"]["rally_car"]["red"]
-        self.rally_blue_unlocked = self.unlocked["textures"]["rally_car"]["blue"]
-        self.rally_green_unlocked = self.unlocked["textures"]["rally_car"]["green"]
-        self.rally_orange_unlocked = self.unlocked["textures"]["rally_car"]["orange"]
-        self.rally_black_unlocked = self.unlocked["textures"]["rally_car"]["black"]
-        self.rally_white_unlocked = self.unlocked["textures"]["rally_car"]["white"]
-
-        self.viking_helmet_unlocked = self.unlocked["cosmetics"]["viking_helmet"]
-        self.duck_unlocked = self.unlocked["cosmetics"]["duck"]
-        self.banana_unlocked = self.unlocked["cosmetics"]["banana"]
-        self.surfinbird_unlocked = self.unlocked["cosmetics"]["surfinbird"]
-
-        self.drift_unlocked = self.unlocked["gamemodes"]["drift"]
-
-    def save_unlocked(self):
-        """
-        Saves the unlocks to a json file
-        """
-        self.unlocked_dict = {
-            "tracks": {
-                "sand_track": self.sand_track.unlocked,
-                "grass_track": True,
-                "snow_track": self.snow_track.unlocked,
-                "forest_track": self.forest_track.unlocked,
-                "savannah_track": self.savannah_track.unlocked,
-                "lake_track": self.lake_track.unlocked
-            },
-            "beat_mandaw": {
-                "sand_track": self.beat_mandaw_sand_track,
-                "grass_track": self.beat_mandaw_grass_track,
-                "snow_track": self.beat_mandaw_snow_track,
-                "forest_track": self.beat_mandaw_forest_track,
-                "savannah_track": self.beat_mandaw_savannah_track,
-                "lake_track": self.beat_mandaw_lake_track
-            },
-            "cars": {
-                "sports_car": self.sports_unlocked,
-                "muscle_car": self.muscle_unlocked,
-                "limo": self.limo_unlocked,
-                "lorry": self.lorry_unlocked,
-                "hatchback": self.hatchback_unlocked,
-                "rally_car": self.rally_unlocked
-            },
-            "textures": {
-                "sports_car": {
-                    "red": self.sports_red_unlocked,
-                    "blue": self.sports_blue_unlocked,
-                    "green": self.sports_green_unlocked,
-                    "orange": self.sports_orange_unlocked,
-                    "black": self.sports_black_unlocked,
-                    "white": self.sports_white_unlocked
-                },
-                "muscle_car": {
-                    "red": self.muscle_red_unlocked,
-                    "blue": self.muscle_blue_unlocked,
-                    "green": self.muscle_green_unlocked,
-                    "orange": self.muscle_orange_unlocked,
-                    "black": self.muscle_black_unlocked,
-                    "white": self.muscle_white_unlocked
-                },
-                "limo": {
-                    "red": self.limo_red_unlocked,
-                    "blue": self.limo_blue_unlocked,
-                    "green": self.limo_green_unlocked,
-                    "orange": self.limo_orange_unlocked,
-                    "black": self.limo_black_unlocked,
-                    "white": self.limo_white_unlocked
-                },
-                "lorry": {
-                    "red": self.lorry_red_unlocked,
-                    "blue": self.lorry_blue_unlocked,
-                    "green": self.lorry_green_unlocked,
-                    "orange": self.lorry_orange_unlocked,
-                    "black": self.lorry_black_unlocked,
-                    "white": self.lorry_white_unlocked
-                },
-                "hatchback": {
-                    "red": self.hatchback_red_unlocked,
-                    "blue": self.hatchback_blue_unlocked,
-                    "green": self.hatchback_green_unlocked,
-                    "orange": self.hatchback_orange_unlocked,
-                    "black": self.hatchback_black_unlocked,
-                    "white": self.hatchback_white_unlocked
-                },
-                "rally_car": {
-                    "red": self.rally_red_unlocked,
-                    "blue": self.rally_blue_unlocked,
-                    "green": self.rally_green_unlocked,
-                    "orange": self.rally_orange_unlocked,
-                    "black": self.rally_black_unlocked,
-                    "white": self.rally_white_unlocked
-                }
-            },
-            "cosmetics": {
-                "viking_helmet": self.viking_helmet_unlocked,
-                "duck": self.duck_unlocked,
-                "banana": self.banana_unlocked,
-                "surfinbird": self.surfinbird_unlocked
-            },
-            "gamemodes": {
-                "drift": self.drift_unlocked
-            }
-        }
-
-        with open(self.unlocked_json, "w") as hs:
-            json.dump(self.unlocked_dict, hs, indent = 4)
-    
-    def reset_timer(self):
-        """
-        Resets the timer
-        """
-        self.count = self.reset_count
-        self.timer.enable()
-        self.reset_count_timer.disable()
 
     def reset_drift(self):
         """
@@ -1358,32 +899,6 @@ class CarRepresentationRL(Entity):
         )
 
         self.model_path = str(self.model).replace("render/scene/car_representation/", "")
-        
-        self.viking_helmet = Entity(model = "viking_helmet.obj", texture = "viking_helmet.png", parent = self)
-        self.duck = Entity(model = "duck.obj", parent = self)
-        self.banana = Entity(model = "banana.obj", parent = self)
-        self.surfinbird = Entity(model = "surfinbird.obj", texture = "surfinbird.png", parent = self)
-        self.surfboard = Entity(model = "surfboard.obj", texture = "surfboard.png", parent = self.surfinbird)
-        self.viking_helmet.disable()
-        self.duck.disable()
-        self.banana.disable()
-        self.surfinbird.disable()
 
-        self.cosmetics = [self.viking_helmet, self.duck, self.banana, self.surfinbird]
 
         self.text_object = None
-        self.highscore = 0.0
-
-        invoke(self.update_representation, delay = 5)
-
-    def update_representation(self):
-        for cosmetic in self.cosmetics:
-            if cosmetic.enabled:
-                if self.model_path == "lorry.obj":
-                    cosmetic.y = 1.5
-                elif self.model_path == "limo.obj":
-                    cosmetic.y = 0.1
-                elif self.model_path == "sports-car.obj" or self.model_path == "muscle-car.obj":
-                    cosmetic.y = 0
-
-        invoke(self.update_representation, delay = 5)

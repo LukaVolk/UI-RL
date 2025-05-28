@@ -1,7 +1,7 @@
 from ursina import *
 import random
-from constants import CHECKPOINT_REWARD, CHECKPOINT_WIDTH, FINISH_LINE_REWARD, MIN_SPEED_THRESHOLD, SHOW_CHECKPOINTS, SPEED_REWARD, TIME_PENALTY, WALL_PENALTY, WRONG_CHECKPOINT_PENALTY, SHOW_BOUNDRIES, SHOW_WALLS
-
+from constants import *
+from reinforcment_learning import DQNAgent
 class GrassTrackRL(Entity):
     def __init__(self, cars):
         application.audio = False
@@ -18,10 +18,26 @@ class GrassTrackRL(Entity):
         self.car_action_timers = {car: 0.0 for car in self.cars}
         self.car_seeds = {car: random.randint(1, 10000) for car in self.cars}
 
-        self.action_interval = 0.1
+        self.action_interval = ACTION_INTERVAL
 
+        self.DQNAgent = DQNAgent(observation_size=OBESERVATION_SIZE, num_actions=len(ACTION_MAP))
+        self.num_of_episodes = EPISODE_NUMBERS
+        self.current_episode = 0
+        self.episode_length = EPISODE_LENGTH
+        self.car_action_queues = []
 
         self.print_timer = 0
+        self.is_learning = False
+        self.is_reinforcement_learning = False
+
+        #timer
+        self.timer_running = False
+        self.timer = Text(text = "", origin = (0, 0), size = 0.05, scale = (1, 1), position = (-0.7, 0.43))
+        self.episode = Text(text = "", origin = (0, 0), size = 0.05, scale = (0.6, 0.6), position = (-0.65, 0.38))
+        self.phase = Text(text = "Learning Phase", origin = (0, 0), size = 0.05, scale = (0.6, 0.6), position = (-0.65, 0.33))
+        self.timer.disable()
+        self.episode.disable()
+        self.phase.disable()
 
         self.finish_line = Entity(model = "cube", position = (-62, -40, 15), rotation = (0, 0, 0), scale = (3, 8, 30), visible = False)
         self.boundaries = Entity(model = "grass_track_bounds.obj", collider = "mesh", position = (0, -50, 0), rotation = (0, 270, 0), scale = (25, 25, 25), visible = SHOW_BOUNDRIES)
@@ -116,35 +132,58 @@ class GrassTrackRL(Entity):
             # Previous checkpoint check
             prev_checkpoint = (car.next_checkpoint_index - 1) % len(self.checkpoints)
             if checkpoint_index == prev_checkpoint:
-                print(f"Previous checkpoint {checkpoint_index} hit - ignoring")
+                #print(f"Previous checkpoint {checkpoint_index} hit - ignoring")
                 return None
                 
             # Expected checkpoint check    
             if checkpoint_index == car.next_checkpoint_index:
                 self.car_checkpoints[car][checkpoint_index] = True
                 car.next_checkpoint_index = (checkpoint_index + 1) % len(self.checkpoints)
-                print(f"Car {car} hit checkpoint {checkpoint_index}. Next: {car.next_checkpoint_index}")
+                #print(f"Car {car} hit checkpoint {checkpoint_index}. Next: {car.next_checkpoint_index}")
                 return True
                 
             # Wrong checkpoint
-            print(f"Wrong checkpoint! Expected {car.next_checkpoint_index}, got {checkpoint_index}")
+            #print(f"Wrong checkpoint! Expected {car.next_checkpoint_index}, got {checkpoint_index}")
             return False
     
     def get_random_action(self, car):
         # Use car-specific seed for randomization
+        #tuki dodaj dodatne utezi glede na avto
         random.seed(self.car_seeds[car] + int(time.time() * 1000))
-        action = random.randint(0, 5)
+        action = random.randint(0, len(ACTION_MAP))
         self.car_seeds[car] = random.randint(1, 10000)  # Update seed
         return action
+    
+    def _is_done(self, car):
+        # This function is identical to the Gymnasium version, but without `truncated`
+        done = False
 
-    def update(self):
-        # print car position every 5 seconds
+        # If max steps reached
+        if self.current_episode >= self.num_of_episodes:
+            print("Maximum number of episodes reached!")
+            done = True
 
-        # self.print_timer += time.dt  # Add elapsed time
-        # if self.print_timer >= 5:
-        #     print(self.car.position)
-        #     self.print_timer = 0
-        
+        # If car completes lap
+        if car.next_checkpoint_index >= len(self.checkpoints):
+            print("All waypoints completed!")
+            done = True
+            # Final large reward can be added in _get_reward or here
+
+        return done
+
+    def learning_process(self):
+        #print(f"Episode: {self.current_episode}, Timer: {self.print_timer:.2f}")
+        if self.print_timer >= self.episode_length and REINFORCEMENT_LEARNING:
+            self.print_timer = 0
+            self.current_episode += 1
+            for car in self.cars:
+                self.car_action_queues.append([car.action_queue.copy(), car.total_reward])
+                if hasattr(car, 'reset'):
+                    car.reset()
+                self.current_waypoint_index = 0
+            # reset learning
+            
+        #learning
         for car in self.cars:
             if car.simple_intersects(self.finish_line):
                 if car.anti_cheat == 1:
@@ -153,13 +192,9 @@ class GrassTrackRL(Entity):
                         if hasattr(car, 'give_reward'):
                             car.give_reward(FINISH_LINE_REWARD)
                             print(f"Lap complete! Giving finish line reward")
-                    car.timer_running = True
                     car.anti_cheat = 0
                     car.next_checkpoint_index = 0
-                    if car.gamemode != "drift":
-                        invoke(car.reset_timer, delay = 3)
 
-                    car.check_highscore()
                     self.car_checkpoints[car] = [False] * len(self.checkpoints)
 
                 self.wall1.enable()
@@ -179,14 +214,14 @@ class GrassTrackRL(Entity):
                     car.anti_cheat = 1
 
             # TIME PENALTY
-            if hasattr(car, 'give_reward') and car.timer_running:
+            if hasattr(car, 'give_reward') and self.timer_running:
                 # Time penalty - encourage faster lap times
                 penalty = TIME_PENALTY * time.dt
                 car.give_reward(penalty)
                 #print(f"Time penalty: {penalty:.2f}")
              
             # SPEED REWARD
-            if hasattr(car, 'give_reward') and car.timer_running:
+            if hasattr(car, 'give_reward') and self.timer_running:
                 # Speed reward - encourage maintaining good speed
                 if abs(car.speed) > MIN_SPEED_THRESHOLD:
                     # Scale reward with speed and time
@@ -209,7 +244,7 @@ class GrassTrackRL(Entity):
             if car.wall_hit:
                 if hasattr(car, 'give_reward'):
                     car.give_reward(WALL_PENALTY)
-                    print(f"Car {car} hit a wall! Giving penalty")
+                    #print(f"Car {car} hit a wall! Giving penalty")
 
             # CHECKPOINT REWARD
             for i, cp in enumerate(self.checkpoints):
@@ -226,6 +261,8 @@ class GrassTrackRL(Entity):
                     # if hasattr(self.car, "give_bonus_reward"):
                     #     self.car.give_bonus_reward(i)
         
+            state = car.get_state()
+            action = None
             # Random action for reinforcement learning
             if car.rl and self.enabled and car.visible:
                 self.car_action_timers[car] += time.dt
@@ -233,3 +270,175 @@ class GrassTrackRL(Entity):
                     self.car_action_timers[car] = 0
                     action = self.get_random_action(car)
                     car.execute_action(action)
+
+            
+            reward = car.total_reward if hasattr(car, 'total_reward') else 0
+            next_state = car.get_state()
+            done = self._is_done(car)
+
+            #print(f"Action: {action}, Reward: {reward}, State: {state}")
+            #store experience
+            if action is not None:
+                self.DQNAgent.store_experience(
+                    state=state, 
+                    action=action, 
+                    reward=reward, 
+                    next_state=next_state, 
+                    done=done
+                )
+
+    def exploitation_process(self):
+        #in this part we will use the trained model to control the car
+        #print(f"Exploitation Phase - Episode: {self.current_episode}, Timer: {self.print_timer:.2f}")
+        if self.print_timer >= self.episode_length and REINFORCEMENT_LEARNING:
+            self.print_timer = 0
+            self.current_episode += 1
+            for car in self.cars:
+                if hasattr(car, 'reset'):
+                    car.reset()
+                self.current_waypoint_index = 0
+            # reset exploitation
+        
+        #exploitation
+
+        for car in self.cars:
+            if car.simple_intersects(self.finish_line):
+                if car.anti_cheat == 1:
+                    if all(self.car_checkpoints[car]):
+                        # FINISH LINE REWARD
+                        if hasattr(car, 'give_reward'):
+                            car.give_reward(FINISH_LINE_REWARD)
+                            print(f"Lap complete! Giving finish line reward")
+                    car.anti_cheat = 0
+                    car.next_checkpoint_index = 0
+
+                    self.car_checkpoints[car] = [False] * len(self.checkpoints)
+
+                self.wall1.enable()
+                self.wall2.enable()
+                self.wall3.disable()
+                self.wall4.disable()
+
+            if car.simple_intersects(self.wall_trigger):
+                self.wall1.disable()
+                self.wall2.disable()
+                self.wall3.enable()
+                self.wall4.enable()
+                car.anti_cheat = 0.5
+
+            if car.simple_intersects(self.wall_trigger_ramp):
+                if car.anti_cheat == 0.5:
+                    car.anti_cheat = 1
+
+            # TIME PENALTY
+            if hasattr(car, 'give_reward') and self.timer_running:
+                # Time penalty - encourage faster lap times
+                penalty = TIME_PENALTY * time.dt
+                car.give_reward(penalty)
+                #print(f"Time penalty: {penalty:.2f}")
+             
+            # SPEED REWARD
+            if hasattr(car, 'give_reward') and self.timer_running:
+                # Speed reward - encourage maintaining good speed
+                if abs(car.speed) > MIN_SPEED_THRESHOLD:
+                    # Scale reward with speed and time
+                    reward = abs(car.speed) * SPEED_REWARD * time.dt
+                    car.give_reward(reward)
+                    
+                    # Extra reward for near max speed
+                    if car.speed > car.topspeed * 0.8:
+                        car.give_reward(reward * 2)
+                        #print(f"Speed reward: {reward:.2f} + bonus: {reward * 2:.2f}")
+                        
+                elif abs(car.speed) < MIN_SPEED_THRESHOLD:
+                    # Small penalty for very low speed
+                    penalty = -SPEED_REWARD * time.dt
+                    car.give_reward(penalty)
+                    #print(f"Speed penalty: {penalty:.2f}")
+
+            
+            # Check for collisions with walls
+            if car.wall_hit:
+                if hasattr(car, 'give_reward'):
+                    car.give_reward(WALL_PENALTY)
+            #print(f"Car {car} wall hit: {car.wall_hit}")
+            # CHECKPOINT REWARD
+            for i, cp in enumerate(self.checkpoints):
+                if car.simple_intersects(cp):
+                    result = self.handle_checkpoint(car, i)
+                    if result is True:
+                        if hasattr(car, 'give_reward'):
+                            car.give_reward(CHECKPOINT_REWARD)
+                    elif result is False:
+                        if hasattr(car, 'give_reward'):
+                            car.give_reward(WRONG_CHECKPOINT_PENALTY)
+
+                    # Give bonus for reinforcement learning
+                    # if hasattr(self.car, "give_bonus_reward"):
+                    #     self.car.give_bonus_reward(i)
+            state = car.get_state2(self.checkpoints)
+            action = None
+            # Use DQN agent to get action
+            if car.rl and self.enabled and car.visible:
+                self.car_action_timers[car] += time.dt
+                if self.car_action_timers[car] >= self.action_interval:
+                    self.car_action_timers[car] = 0
+                    action = self.DQNAgent.choose_action(state)
+                    car.execute_action(action)
+            
+            reward = car.total_reward if hasattr(car, 'total_reward') else 0
+            next_state = car.get_state2(self.checkpoints)
+            done = self._is_done(car)
+            #print(f"Action: {action}, Reward: {reward}, State: {state}")
+            #store experience
+            if action is not None:
+                self.DQNAgent.store_experience(
+                    state=state, 
+                    action=action, 
+                    reward=reward, 
+                    next_state=next_state, 
+                    done=done
+                )
+
+    def update(self):
+        if self.current_episode >= self.num_of_episodes:
+            self.episode.disable()
+            self.timer.disable()
+            self.timer_running = False
+            self.print_timer = 0
+            self.current_episode = 0
+            if self.phase.text == "Learning Phase":
+                self.phase.text = "Exploitation Phase"
+                self.is_learning = False
+                self.is_reinforcement_learning = True
+            else:
+                self.is_learning = False
+                self.is_reinforcement_learning = False
+
+
+
+        if self.is_learning:
+            self.phase.enable()
+            self.timer_running = True
+            self.timer.enable()
+            self.episode.enable()
+            self.print_timer += time.dt  # Add elapsed time
+            self.timer.text = str(round(self.print_timer, 1)) + "s"
+            self.episode.text = f"Episode: {self.current_episode + 1}/{self.num_of_episodes}"
+            self.learning_process()
+
+        if self.is_reinforcement_learning:
+            self.timer_running = True
+            self.timer.enable()
+            self.episode.enable()
+            self.print_timer += time.dt  # Add elapsed time
+            self.timer.text = str(round(self.print_timer, 1)) + "s"
+            self.episode.text = f"Episode: {self.current_episode + 1}/{self.num_of_episodes}"
+            self.exploitation_process()
+
+        if not self.is_learning and not self.is_reinforcement_learning:
+            self.timer.disable()
+            self.episode.disable()
+            self.phase.disable()
+            self.timer_running = False
+            
