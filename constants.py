@@ -1,17 +1,17 @@
-CAR_INSTANCES = 15
+CAR_INSTANCES = 8
 REINFORCEMENT_LEARNING = True
 SHOW_CHECKPOINTS = True
 SHOW_WALLS = False
 SHOW_BOUNDRIES = False
 SHOW_SENSORS = False
 CHECKPOINT_WIDTH = 50
-TOP_K = 1 # Number of top cars to learn from
+TOP_K = 4 # Number of top cars to learn from
 
 #Reinforcement Learning Constants
-EPISODE_LENGTH = 10
-EPISODE_NUMBERS = 20
+EPISODE_LENGTH = 20
+EPISODE_NUMBERS = 30
 ACTION_INTERVAL = 0.1 # Time interval between actions in seconds
-OBESERVATION_SIZE = 9+8 # Number of sensors + speed + angle + distance to next checkpoint
+OBESERVATION_SIZE = 9+8+1 # Number of sensors + speed + angle + distance to next checkpoint + step number
 
 # SCORING
 # Checkpoint rewards
@@ -20,7 +20,7 @@ WRONG_CHECKPOINT_PENALTY = -5000 # DONE
 
 # Terminal rewards
 FINISH_LINE_REWARD = 10000 # DONE
-WALL_PENALTY = -10 # Increased penalty for hitting walls
+WALL_PENALTY = -100 # Increased penalty for hitting walls
 
 # Continuous rewards
 TIME_PENALTY = -0.1 # Reduced time penalty

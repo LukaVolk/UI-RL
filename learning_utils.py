@@ -3,6 +3,7 @@ Utility functions for improved reinforcement learning process
 """
 import time
 from constants import *
+import numpy as np
 
 def create_learning_methods(track_instance):
     """Add improved learning methods to the track instance"""
@@ -171,6 +172,9 @@ def create_learning_methods(track_instance):
         """Handle RL learning for a single car"""
         # Get current state
         current_state = car.get_state2(self.checkpoints)
+        current_state = np.append(current_state, self.step_number)
+
+
         
         # Check if it's time for a new action
         self.car_action_timers[car] += time.dt
@@ -183,7 +187,7 @@ def create_learning_methods(track_instance):
                 self._store_experience(car, current_state)
             
             # Choose and execute new action
-            override_eps = 0.0 if car.is_exploitation_car else None
+            override_eps = 0.0 if car.is_exploitation_car else 1
             action = self.DQNAgent.choose_action(current_state, training=True, override_epsilon=override_eps)
             self.action_counts[action] += 1
             car.execute_action(action)
@@ -200,6 +204,8 @@ def create_learning_methods(track_instance):
                 loss = self.DQNAgent.learn()
                 if loss is not None:
                     self.learning_step_count += 1
+            
+            self.step_number += 1
                     
     def _store_experience(self, car, next_state):
         """Store experience in replay buffer"""

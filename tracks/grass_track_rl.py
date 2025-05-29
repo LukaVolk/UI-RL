@@ -5,6 +5,7 @@ from constants import *
 from reinforcment_learning import DQNAgent
 from learning_utils import create_learning_methods
 import os
+import numpy as np
 
 class GrassTrackRL(Entity):
     def __init__(self, cars):
@@ -25,6 +26,7 @@ class GrassTrackRL(Entity):
         self.eval_car = cars[0] if cars else None
 
         self.action_interval = ACTION_INTERVAL
+        self.step_number = 0
 
         # Initialize DQN agent with improved hyperparameters
         model_path = "models/dqn_latest.pth"
@@ -262,6 +264,7 @@ class GrassTrackRL(Entity):
         """Improved learning process using modular approach"""
         # Episode management
         if self.print_timer >= self.episode_length:
+            self.step_number = 0
             self._end_episode()
             
         # Main learning loop for each car
@@ -274,6 +277,8 @@ class GrassTrackRL(Entity):
         if self.print_timer >= self.episode_length and REINFORCEMENT_LEARNING:
             self.print_timer = 0
             self.current_episode += 1
+            self.step_number = 0
+            self.DQNAgent.learn()
             for car in self.cars:
                 if hasattr(car, 'reset'):
                     car.reset()
@@ -286,9 +291,18 @@ class GrassTrackRL(Entity):
                 if self.car_action_timers[car] >= self.action_interval:
                     self.car_action_timers[car] = 0
                     state = car.get_state2(self.checkpoints)
+                    state = np.append(state, self.step_number)
                     # Use exploitation mode (training=False)
-                    action = self.DQNAgent.choose_action(state, training=False)
+                    action = self.DQNAgent.choose_action(state, training=True)
                     car.execute_action(action)
+        
+                next_state = car.get_state2(self.checkpoints)
+                next_state = np.append(next_state, self.step_number+1)
+                # Store experience with learning
+                if car in self.top_k_cars:
+                    self._store_experience(car, next_state)
+                
+        self.step_number += 1
 
 
     def update(self):

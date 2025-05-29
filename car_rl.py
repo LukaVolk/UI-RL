@@ -262,7 +262,7 @@ class CarRL(Entity):
         self.model = "rally-car.obj"
         self.texture = "rally-red.png"
         self.drive_sound.clip = "rally.mp3"
-        self.topspeed = 34
+        self.topspeed = 26
         self.acceleration = 0.46
         self.drift_amount = 4
         self.turning_speed = 7
