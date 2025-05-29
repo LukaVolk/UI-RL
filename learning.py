@@ -95,7 +95,7 @@ except Exception as e:
     print("error starting thread", e)
 
 
-cars = [CarRL() for _ in range(CAR_INSTANCES)]
+cars = [CarRL(is_exploitation_car=(i == 0)) for i in range(CAR_INSTANCES)]
 for car_i in cars:
     car_i.visible = False
 

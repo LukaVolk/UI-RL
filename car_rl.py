@@ -2,14 +2,15 @@ from ursina import *
 from ursina import curve
 from particles import Particles, TrailRenderer
 import json
-from constants import ACTION_MAP, REINFORCEMENT_LEARNING,SHOW_SENSORS
+import math
+from constants import ACTION_MAP, REINFORCEMENT_LEARNING, SHOW_SENSORS, BACKWARD_PENALTY, MIN_FORWARD_SPEED, PROGRESS_REWARD
 import numpy as np
 
 sign = lambda x: -1 if x < 0 else (1 if x > 0 else 0)
 Text.default_resolution = 1080 * Text.size
 
 class CarRL(Entity):
-    def __init__(self, position = (0, 0, 4), rotation = (0, 0, 0), topspeed = 30, acceleration = 0.35, braking_strength = 30, friction = 0.6, drift_speed = 35, camera_speed = 8):
+    def __init__(self, position = (0, 0, 4), rotation = (0, 0, 0), topspeed = 30, acceleration = 0.35, braking_strength = 30, friction = 0.6, drift_speed = 35, camera_speed = 8, is_exploitation_car = False):
         super().__init__(
             model = "sports-car.obj",
             texture = "sports-red.png",
@@ -17,6 +18,11 @@ class CarRL(Entity):
             position = position,
             rotation = rotation,
         )
+
+        self.is_exploitation_car = is_exploitation_car
+
+        if is_exploitation_car:
+            self.texture = "sports-blue.png"
 
         self.grass_track_rl = False
 
@@ -125,9 +131,10 @@ class CarRL(Entity):
         self.ai_cars = []
         self.print_timer = 0
         self.next_checkpoint_index = 0
-        self.prev_position = None
+        self.prev_position = self.position if position else Vec3(0, 0, 0)
         self.ignore_entities = []
         self.max_track_distance_for_norm = None
+        self.last_checkpoint_distance = None  # Track distance to checkpoint for progress reward
 
         # Add reward tracking
         self.current_reward = 0
@@ -271,19 +278,22 @@ class CarRL(Entity):
     def execute_action(self, action):
         """Execute action from RL agent
         
-        Actions:
+        Updated Actions (no backward movement):
         0: No action
         1: Forward
         2: Forward + Left
         3: Forward + Right
-        4: Brake
-        5: Handbrakes
-        6: Left
-        7: Right
+        4: Left (for corrections)
+        5: Right (for corrections)
         """
+        # Reset all input states
         self.input_states = {k: False for k in self.input_states}
-        for key in ACTION_MAP.get(action, []):
-            self.input_states[key] = True
+        
+        # Execute the action based on ACTION_MAP
+        action_keys = ACTION_MAP.get(action, [])
+        for key in action_keys:
+            if key in self.input_states:
+                self.input_states[key] = True
         
         
 
@@ -355,6 +365,12 @@ class CarRL(Entity):
         self.current_reward = reward
         self.total_reward += reward
         self.last_reward = reward
+        
+        # Add penalty for backward movement
+        if self.speed < -MIN_FORWARD_SPEED:
+            backward_penalty = BACKWARD_PENALTY * time.dt
+            self.total_reward += backward_penalty
+            #print(f"Backward penalty: {backward_penalty:.2f}")
         
         #print(f"Reward given: {reward:.1f} | Total: {self.total_reward:.1f}")
 
@@ -524,6 +540,8 @@ class CarRL(Entity):
         self.speed = 0
         self.velocity_y = 0
         self.anti_cheat = 1
+        self.next_checkpoint_index = 0
+        self.last_checkpoint_distance = None  # Reset progress tracking
         #self.timer_running = True
         self.count = 0.0
         self.reset_count = 0.0
@@ -899,6 +917,8 @@ class CarRL(Entity):
             self.position = (-80, -30, 18.5)
             self.rotation = (0, 90, 0)
             self.total_reward = 0
+            self.next_checkpoint_index = 0
+            self.last_checkpoint_distance = None
         else:
             self.position = (-80, -30, 18.5)
             self.rotation = (0, 90, 0)
