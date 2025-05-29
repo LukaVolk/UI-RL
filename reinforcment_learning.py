@@ -1,129 +1,3 @@
-# from constants import *
-# import numpy as np
-# from constants import ACTION_MAP
-# class ReinforcementLearning():
-#     def __init__(self, car, grass_track_rl, max_steps=1000):
-#         self.car = car
-#         self.grass_track_rl = grass_track_rl
-#         self.current_step = 0
-#         self.max_episode_steps = max_steps  # Define the maximum number of steps for training/testing
-#         self.current_waypoint_index = 0
-#         self.waypoints = grass_track_rl.checkpoints
-#         self.prev_dist = self.car.get_sensor_distances(0)  # Initialize previous distance to None
-#         self.observation_size = 8  # Define the size of the observation space
-#         self.num_actions = len(ACTION_MAP)  # Number of discrete actions available
-#     def train(self):
-#         pass
-
-#     def test(self):
-#         # Implement the testing logic here
-#         pass
-
-#     #verjetno ne rabim
-#     def _get_observation(self):
-#         # This function is identical to the Gymnasium version
-#         # Collect all state information from your CarRL object and environment
-#         if self.car:
-#             car_pos = self.car.position
-#             car_vel = self.car.speed
-#             car_rot = self.car.rotation
-
-#             dist_arr = self.car.get_sensor_distances(self.current_waypoint_index)
-#             dist = sum(dist_arr)
-
-#             obs = np.array([
-#                 car_pos.x, car_pos.y, car_pos.z,
-#                 car_vel,
-#                 car_rot.x, car_rot.y, car_rot.z,
-#                 dist
-#             ], dtype=np.float32)
-#             return obs
-#         return np.zeros(self.observation_size, dtype=np.float32)
-
-#     def _get_reward(self, old_dist):
-#         # This function is identical to the Gymnasium version
-#         reward = 0.0
-#         if self.car and self.waypoints and self.current_waypoint_index < len(self.waypoints):
-#             current_waypoint = self.waypoints[self.current_waypoint_index]
-#             # Assume self.car.prev_position is updated in CarRL's update method
-#             if hasattr(self.car, 'prev_position') and self.car.prev_position is not None:
-#                 new_dist_arr = self.car.get_sensor_distances(current_waypoint)
-#                 new_dist = sum(new_dist_arr)
-#                 reward += (old_dist - new_dist) * 0.1 # Reward for getting closer
-#                 self.prev_dist = new_dist
-#                 for dist in new_dist_arr:
-#                     if dist < 0.1:
-#                         reward += 10 
-#                         #tuki je problem, ker naslednji reward bo pol ful slabsi
-#                         self.current_waypoint_index += 1
-#                         print(f"Passed waypoint {self.current_waypoint_index}")
-
-#         reward -= 0.04 # Time penalty
-
-#         return reward
-
-#     def _is_done(self):
-#         # This function is identical to the Gymnasium version, but without `truncated`
-#         done = False
-
-#         # If max steps reached
-#         if self.current_step >= self.max_episode_steps:
-#             done = True
-
-#         # If car completes lap
-#         if self.current_waypoint_index >= len(self.waypoints):
-#             print("All waypoints completed!")
-#             done = True
-#             # Final large reward can be added in _get_reward or here
-
-#         return done
-
-#     def reset(self):
-#         # Reset car and environment state
-            
-#         self.car.position = (-80, -30, 18.5)
-#         self.car.rotation = (0, 90, 0)
-#         self.car.visible = True
-#         self.car.collision = False 
-#         self.car.camera_follow = False         
-#         self.car.speed = 0
-#         self.car.velocity_y = 0
-#         self.car.anti_cheat = 1
-#         self.car.timer_running = True
-#         self.car.count = 0.0
-#         self.car.reset_count = 0.0
-#         self.car.total_reward = 0
-
-#         self.current_waypoint_index = 0
-#         self.current_step = 0
-
-#         # Return initial observation
-#         return self._get_observation()
-
-#     def step(self, action):
-#         # Execute the action
-#         self.car.execute_action(action)
-
-#         # Increment step count
-#         self.current_step += 1
-
-#         # Get next observation, reward, and done status
-#         observation = self._get_observation()
-#         reward = self._get_reward(self.prev_dist)
-#         done = self._is_done()
-
-#         # Return them
-#         return observation, reward, done
-
-#     def render(self):
-#         # Ursina handles this automatically via app.run()
-#         pass
-
-
-'''2. The RL Agent Class (Conceptual)
-You'll need an RL agent. For discrete actions like yours, a Deep Q-Network (DQN) is a common choice. This would involve a neural network (using PyTorch or TensorFlow) that takes the state as input and outputs Q-values for each action.
-'''
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -132,76 +6,138 @@ from collections import deque
 import time
 import numpy as np
 
-from constants import ACTION_MAP
+from constants import NUM_ACTIONS
 
 # Define your Neural Network
 class QNetwork(nn.Module):
     def __init__(self, observation_size, num_actions):
         super().__init__()
-        self.fc1 = nn.Linear(observation_size, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, num_actions)
-
+        # Improved architecture with dropout and batch normalization
+        self.fc1 = nn.Linear(observation_size, 256)
+        self.bn1 = nn.BatchNorm1d(256)
+        self.dropout1 = nn.Dropout(0.2)
+        
+        self.fc2 = nn.Linear(256, 256)
+        self.bn2 = nn.BatchNorm1d(256)
+        self.dropout2 = nn.Dropout(0.2)
+        
+        self.fc3 = nn.Linear(256, 128)
+        self.bn3 = nn.BatchNorm1d(128)
+        self.dropout3 = nn.Dropout(0.1)
+        
+        self.fc4 = nn.Linear(128, num_actions)
+        
+        # Initialize weights using Xavier initialization
+        self._initialize_weights()
+    
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                nn.init.constant_(m.bias, 0)
+    
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        return self.fc3(x)
+        is_single_input = False
+
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+            is_single_input = True
+
+        # Safe forward pass: temporarily disable BatchNorm stats update if batch size is 1
+        if self.training and x.size(0) == 1:
+            # Forward pass using eval mode for batch norm layers
+            self.eval()
+            with torch.no_grad():
+                out = torch.relu(self.bn1(self.fc1(x)))
+                out = self.dropout1(out)
+
+                out = torch.relu(self.bn2(self.fc2(out)))
+                out = self.dropout2(out)
+
+                out = torch.relu(self.bn3(self.fc3(out)))
+                out = self.dropout3(out)
+
+                out = self.fc4(out)
+            self.train()
+        else:
+            out = torch.relu(self.bn1(self.fc1(x)))
+            out = self.dropout1(out)
+
+            out = torch.relu(self.bn2(self.fc2(out)))
+            out = self.dropout2(out)
+
+            out = torch.relu(self.bn3(self.fc3(out)))
+            out = self.dropout3(out)
+
+            out = self.fc4(out)
+
+        return out.squeeze(0) if is_single_input else out
 
 class DQNAgent:
-    def __init__(self, observation_size, num_actions, learning_rate=0.001, gamma=0.99,
-                 epsilon_start=1, epsilon_end=0.01, epsilon_decay = 0.99995,
-                 batch_size=32, buffer_size=300000, load_path=None):
+    def __init__(self, observation_size, num_actions, learning_rate=0.0003, gamma=0.99,
+                 epsilon_start=1.0, epsilon_end=0.15, epsilon_decay=0.9999,
+                 batch_size=64, buffer_size=100000, target_update_freq=1000, load_path=None, epsilon_decay_steps=100000):
     
         
         self.observation_size = observation_size
         self.num_actions = num_actions
         self.gamma = gamma
-        self.epsilon = epsilon_start
+        self.epsilon_start = epsilon_start
         self.epsilon_end = epsilon_end
+        self.epsilon = epsilon_start
         self.epsilon_decay = epsilon_decay
         self.batch_size = batch_size
+        self.target_update_freq = target_update_freq
+        
+        # Use GPU if available
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {self.device}")
 
-        self.q_network = QNetwork(observation_size, num_actions)
-        self.target_q_network = QNetwork(observation_size, num_actions)
-        self.target_q_network.load_state_dict(self.q_network.state_dict()) # Copy weights
-        self.target_q_network.eval() # Set target network to evaluation mode
+        self.q_network = QNetwork(observation_size, num_actions).to(self.device)
+        self.target_q_network = QNetwork(observation_size, num_actions).to(self.device)
+        self.target_q_network.load_state_dict(self.q_network.state_dict())
+        self.target_q_network.eval()
 
-        self.optimizer = optim.Adam(self.q_network.parameters(), lr=learning_rate)
-        self.loss_fn = nn.MSELoss()
+        # Use AdamW optimizer with weight decay for better generalization
+        self.optimizer = optim.AdamW(self.q_network.parameters(), lr=learning_rate, weight_decay=1e-4)
+        # Use Huber loss for more stable training
+        self.loss_fn = nn.SmoothL1Loss()
+        
+        # Learning rate scheduler
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=10000, gamma=0.9)
 
         self.replay_buffer = deque(maxlen=buffer_size)
-
         self.current_step = 0
+        self.total_steps = 0
+        
+        # Performance tracking
+        self.episode_rewards = []
+        self.recent_losses = deque(maxlen=100)
 
         if load_path is not None:
-            try:
-                self.load_model(load_path)
-                print(f"✅ Loaded model from {load_path}")
-            except Exception as e:
-                print(f"⚠️ Could not load model from {load_path}: {e}")
+            self.load_model(load_path)
 
-    def choose_action(self, state):
+    def choose_action(self, state, training=True, override_epsilon=None):
         """
-        Chooses an action using an epsilon-greedy policy based on the provided state dictionary.
-        The state dict is converted to a flat numpy array for the neural network.
-        Args:
-            state: A dictionary containing keys like 'speed', 'distances', 'total_reward', 'next_checkpoint', 'rotation_speed'.
-        Returns:
-            action (int): The chosen action index.
+        Chooses an action using an epsilon-greedy policy during training,
+        or pure exploitation during evaluation.
         """
+        state_tensor = torch.tensor(state, dtype=torch.float32).to(self.device)
 
-        state_vec = state # The input 'state' is already the np.array from get_state
-
-        if random.random() < self.epsilon:
-            # Explore
-            return random.randint(0, len(ACTION_MAP) - 1)
+        if training:
+            if random.random() < (override_epsilon if override_epsilon is not None else self.epsilon):
+                # Explore: choose random action
+                return random.randint(0, self.num_actions - 1)
+            else:
+                # Exploit with training mode (use dropout/batchnorm)
+                self.q_network.train()
         else:
-            # Exploit
-            with torch.no_grad():
-                # Add a batch dimension (unsqueeze(0)) because the network expects a batch
-                obs_tensor = torch.tensor(state_vec, dtype=torch.float32).unsqueeze(0)
-                q_values = self.q_network(obs_tensor)
-                return q_values.argmax().item()
+            # Exploit with evaluation mode (disable dropout/batchnorm)
+            self.q_network.eval()
+
+        with torch.no_grad():
+            q_values = self.q_network(state_tensor)
+            return q_values.argmax().item()
 
     def store_experience(self, state, action, reward, next_state, done):
         """
@@ -217,54 +153,123 @@ class DQNAgent:
         self.replay_buffer.append((state, action, reward, next_state, done))
 
     def learn(self):
-        if self.current_step % 100 == 0:
-            print(f"[Step {self.current_step}] Epsilon: {self.epsilon:.4f}")
-        self.current_step += 1
-        if len(self.replay_buffer) < self.batch_size:
-            return
+        self.total_steps += 1
         
+        # Only start learning when we have enough experiences
+        if len(self.replay_buffer) < self.batch_size * 2:
+            return None
+        
+        # Sample a batch of experiences
         batch = random.sample(self.replay_buffer, self.batch_size)
-
-        # Filter out any tuples where state or next_state is None
-        filtered_batch = [exp for exp in batch if exp[0] is not None and exp[3] is not None]
-
-        if len(filtered_batch) < self.batch_size:
-            return
         
+        # Filter out invalid experiences
+        filtered_batch = [exp for exp in batch if exp[0] is not None and exp[3] is not None]
+        if len(filtered_batch) < self.batch_size // 2:
+            return None
+        
+        # Prepare batch data
         states, actions, rewards, next_states, dones = zip(*filtered_batch)
-        states = [np.asarray(s, dtype=np.float32).reshape(self.observation_size) for s in states]
-        next_states = [np.asarray(ns, dtype=np.float32).reshape(self.observation_size) for ns in next_states]
-        states_t = torch.tensor(np.stack(states), dtype=torch.float32)
-        actions_t = torch.tensor(actions, dtype=torch.long).unsqueeze(-1)
-        rewards_t = torch.tensor(rewards, dtype=torch.float32).unsqueeze(-1)
-        next_states_t = torch.tensor(np.stack(next_states), dtype=torch.float32)
-        dones_t = torch.tensor(dones, dtype=torch.float32).unsqueeze(-1)
-
-        # Compute Q-values for current states
-        q_values = self.q_network(states_t).gather(1, actions_t)
-
-        # Compute target Q-values (using target network)
-        next_q_values = self.target_q_network(next_states_t).max(1)[0].unsqueeze(-1)
-        target_q_values = rewards_t + self.gamma * next_q_values * (1 - dones_t)
-
-        # Compute loss and update Q-network
-        loss = self.loss_fn(q_values, target_q_values)
+        
+        # Convert to tensors and move to device
+        states_t = torch.tensor(np.array(states), dtype=torch.float32).to(self.device)
+        actions_t = torch.tensor(actions, dtype=torch.long).to(self.device)
+        rewards_t = torch.tensor(rewards, dtype=torch.float32).to(self.device)
+        next_states_t = torch.tensor(np.array(next_states), dtype=torch.float32).to(self.device)
+        dones_t = torch.tensor(dones, dtype=torch.float32).to(self.device)
+        
+        # Compute current Q-values
+        current_q_values = self.q_network(states_t).gather(1, actions_t.unsqueeze(1))
+        
+        # Compute next Q-values using Double DQN
+        with torch.no_grad():
+            # Use main network to select actions
+            next_actions = self.q_network(next_states_t).argmax(1)
+            # Use target network to evaluate those actions
+            next_q_values = self.target_q_network(next_states_t).gather(1, next_actions.unsqueeze(1))
+            target_q_values = rewards_t.unsqueeze(1) + (self.gamma * next_q_values * (1 - dones_t.unsqueeze(1)))
+        
+        # Compute loss
+        loss = self.loss_fn(current_q_values, target_q_values)
+        
+        # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
+        
+        # Gradient clipping for stability
+        torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=1.0)
+        
         self.optimizer.step()
-
+        self.scheduler.step()
+        
+        # Track loss for monitoring
+        self.recent_losses.append(loss.item())
+        
         # Decay epsilon
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
-
-        # Periodically update target network
-        if self.current_step % 100 == 0: # Update every 100 steps (or episodes)
+        self.epsilon = max(
+            self.epsilon_end, 
+            self.epsilon_start - (self.epsilon_start - self.epsilon_end) * self.total_steps / 100_000
+        )
+        
+        # Update target network
+        if self.total_steps % self.target_update_freq == 0:
             self.target_q_network.load_state_dict(self.q_network.state_dict())
+            print(f"Target network updated at step {self.total_steps}")
+        
+        # Periodic logging
+        if self.total_steps % 1000 == 0:
+            avg_loss = sum(self.recent_losses) / len(self.recent_losses) if self.recent_losses else 0
+            print(f"Step {self.total_steps}: Epsilon={self.epsilon:.4f}, Avg Loss={avg_loss:.4f}, LR={self.scheduler.get_last_lr()[0]:.6f}")
+        
+        return loss.item()
 
     def save_model(self, path):
-        torch.save(self.q_network.state_dict(), path)
+        """Save the complete model state including optimizer and training progress"""
+        checkpoint = {
+            'q_network_state_dict': self.q_network.state_dict(),
+            'target_q_network_state_dict': self.target_q_network.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': self.scheduler.state_dict(),
+            'epsilon': self.epsilon,
+            'total_steps': self.total_steps,
+            'episode_rewards': self.episode_rewards,
+            'observation_size': self.observation_size,
+            'num_actions': self.num_actions
+        }
+        torch.save(checkpoint, path)
+        print(f"Model saved to {path}")
 
-    def load_model(self, path):
-        self.q_network.load_state_dict(torch.load(path))
-        self.target_q_network.load_state_dict(self.q_network.state_dict())
-        self.q_network.eval() # Set to eval mode if just for inference
-        self.target_q_network.eval()
+    def load_model(self, path, evaluation_mode=False):
+        """Load the complete model state"""
+        try:
+            checkpoint = torch.load(path, map_location=self.device)
+            
+            self.q_network.load_state_dict(checkpoint['q_network_state_dict'])
+            self.target_q_network.load_state_dict(checkpoint['target_q_network_state_dict'])
+            
+            if not evaluation_mode:
+                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                self.epsilon = checkpoint.get('epsilon', self.epsilon)
+                self.total_steps = checkpoint.get('total_steps', 0)
+                self.episode_rewards = checkpoint.get('episode_rewards', [])
+            
+            if evaluation_mode:
+                self.q_network.eval()
+                self.target_q_network.eval()
+            
+            print(f"Model loaded from {path} (evaluation_mode={evaluation_mode})")
+            return True
+        except Exception as e:
+            print(f"Failed to load model from {path}: {e}")
+            return False
+    
+    def get_stats(self):
+        """Get training statistics"""
+        avg_loss = sum(self.recent_losses) / len(self.recent_losses) if self.recent_losses else 0
+        return {
+            'epsilon': self.epsilon,
+            'total_steps': self.total_steps,
+            'avg_recent_loss': avg_loss,
+            'buffer_size': len(self.replay_buffer),
+            'learning_rate': self.scheduler.get_last_lr()[0] if hasattr(self.scheduler, 'get_last_lr') else 'N/A'
+        }

@@ -1,7 +1,9 @@
 from ursina import *
 import random
+import os
 from constants import *
 from reinforcment_learning import DQNAgent
+from learning_utils import create_learning_methods
 import os
 
 class GrassTrackRL(Entity):
@@ -20,19 +22,46 @@ class GrassTrackRL(Entity):
         self.car_action_timers = {car: 0.0 for car in self.cars}
         self.car_seeds = {car: random.randint(1, 10000) for car in self.cars}
 
+        self.eval_car = cars[0] if cars else None
+
         self.action_interval = ACTION_INTERVAL
 
-        self.DQNAgent = DQNAgent(observation_size=OBESERVATION_SIZE, num_actions=len(ACTION_MAP))
+        # Initialize DQN agent with improved hyperparameters
+        model_path = "models/dqn_latest.pth"
+        self.DQNAgent = DQNAgent(
+            observation_size=OBESERVATION_SIZE, 
+            num_actions=NUM_ACTIONS,
+            learning_rate=0.0003,
+            gamma=0.99,
+            epsilon_start=1.0,
+            epsilon_end=0.15,
+            epsilon_decay=0.9999,
+            batch_size=64,
+            buffer_size=100000,
+            target_update_freq=1000,
+            load_path=model_path if os.path.exists(model_path) else None
+        )
+        
         self.num_of_episodes = EPISODE_NUMBERS
         self.current_episode = 0
         self.episode_length = EPISODE_LENGTH
         self.car_action_queues = []
-
         self.print_timer = 0
         self.is_learning = False
         self.is_reinforcement_learning = False
-
+        
+        # Learning tracking
         self.top_k_cars = set()  # Set to store top K cars
+        self.action_counts = {action: 0 for action in range(NUM_ACTIONS)}
+        self.episode_rewards = []
+        self.best_episode_reward = float('-inf')
+        self.learning_step_count = 0
+        
+        # Experience storage for each car
+        self.car_experiences = {car: {'state': None, 'action': None, 'reward': 0} for car in self.cars}
+        
+        # Add improved learning methods
+        create_learning_methods(self)
 
         #timer
         self.timer_running = False
@@ -70,6 +99,13 @@ class GrassTrackRL(Entity):
             ),
             Entity(
                 model="cube", 
+                position=(12, -42.648094, 15.503328), 
+                scale=(1, 8, CHECKPOINT_WIDTH), 
+                visible=SHOW_CHECKPOINTS,
+                collision=False  # Disable physical collision
+            ),
+            Entity(
+                model="cube", 
                 position=(42.992534, -42.648094, 18.128223), 
                 scale=(1, 8, CHECKPOINT_WIDTH), 
                 visible=SHOW_CHECKPOINTS,
@@ -86,6 +122,30 @@ class GrassTrackRL(Entity):
             ),
             Entity(
                 model="cube", 
+                position=(0, -42.723522, 61.554302), 
+                scale=(1, 8, CHECKPOINT_WIDTH), 
+                visible=SHOW_CHECKPOINTS,
+                collision=False,
+                rotation=(0, -45, 0)
+            ),
+            Entity(
+                model="cube", 
+                position=(0, -42.50573, 34.137355), 
+                scale=(1, 8, 30), 
+                visible=SHOW_CHECKPOINTS,
+                collision=False,
+                rotation=(0, 90, 0)
+            ),
+            Entity(
+                model="cube", 
+                position=(0, -42.50573, 0), 
+                scale=(1, 8, 30), 
+                visible=SHOW_CHECKPOINTS,
+                collision=False,
+                rotation=(0, 90, 0)
+            ),
+            Entity(
+                model="cube", 
                 position=(-4.456625, -42.379024, -53.188812), 
                 scale=(1, 8, CHECKPOINT_WIDTH), 
                 visible=SHOW_CHECKPOINTS,
@@ -94,12 +154,35 @@ class GrassTrackRL(Entity):
             ),
             Entity(
                 model="cube", 
+                position=(-40, -42.50573, -63.188812), 
+                scale=(1, 8, 30), 
+                visible=SHOW_CHECKPOINTS,
+                collision=False,
+            ),
+            Entity(
+                model="cube", 
+                position=(-80, -34.50573, -63.188812), 
+                scale=(1, 8, 30), 
+                visible=SHOW_CHECKPOINTS,
+                collision=False,
+            ),
+            Entity(
+                model="cube", 
                 position=(-107.281555, -42.50573, -34.137355), 
                 scale=(1, 8, 30), 
                 visible=SHOW_CHECKPOINTS,
                 collision=False,
                 rotation=(0, 90, 0)
-            )
+            ),
+            Entity(
+                model="cube", 
+                position=(-107.281555, -42.50573, 0), 
+                scale=(1, 8, 30), 
+                visible=SHOW_CHECKPOINTS,
+                collision=False,
+                rotation=(0, 90, 0)
+            ),	
+
         ]
         self.car_checkpoints = {car: [False] * len(self.checkpoints) for car in self.cars}
 
@@ -154,7 +237,7 @@ class GrassTrackRL(Entity):
         # Use car-specific seed for randomization
         #tuki dodaj dodatne utezi glede na avto
         random.seed(self.car_seeds[car] + int(time.time() * 1000))
-        action = random.randint(0, len(ACTION_MAP) - 1)  # Random action index
+        action = random.randint(0, NUM_ACTIONS - 1)  # Random action index
         self.car_seeds[car] = random.randint(1, 10000)  # Update seed
         return action
     
@@ -176,279 +259,36 @@ class GrassTrackRL(Entity):
         return done
 
     def learning_process(self):
-        #print(f"Episode: {self.current_episode}, Timer: {self.print_timer:.2f}")
+        """Improved learning process using modular approach"""
+        # Episode management
         if self.print_timer >= self.episode_length:
-            self.print_timer = 0
-            self.current_episode += 1
-            # Store current episode rewards
-            car_rewards = {car: car.total_reward for car in self.cars}
-            print(f"Rewards this episode: {car_rewards}")
-            sorted_cars = sorted(self.cars, key=lambda c: car_rewards[c], reverse=True)
-            self.top_k_cars = set(sorted_cars[:TOP_K])
-
-            print(f"Top {TOP_K} cars this episode:")
-            for c in self.top_k_cars:
-                print(f" - {c} with reward {car_rewards[c]:.2f}")
-            for car in self.cars:
-                self.car_action_queues.append([car.action_queue.copy(), car.total_reward])
-                if hasattr(car, 'reset'):
-                    car.reset()
-                self.current_waypoint_index = 0
-            # reset learning
+            self._end_episode()
             
-        #learning
-        for car in self.cars:
-            if car.simple_intersects(self.finish_line):
-                if car.anti_cheat == 1:
-                    if all(self.car_checkpoints[car]):
-                        # FINISH LINE REWARD
-                        if hasattr(car, 'give_reward'):
-                            car.give_reward(FINISH_LINE_REWARD)
-                            print(f"Lap complete! Giving finish line reward")
-                    car.anti_cheat = 0
-                    car.next_checkpoint_index = 0
-
-                    self.car_checkpoints[car] = [False] * len(self.checkpoints)
-
-                self.wall1.enable()
-                self.wall2.enable()
-                self.wall3.disable()
-                self.wall4.disable()
-
-            if car.simple_intersects(self.wall_trigger):
-                self.wall1.disable()
-                self.wall2.disable()
-                self.wall3.enable()
-                self.wall4.enable()
-                car.anti_cheat = 0.5
-
-            if car.simple_intersects(self.wall_trigger_ramp):
-                if car.anti_cheat == 0.5:
-                    car.anti_cheat = 1
-
-            # TIME PENALTY
-            if hasattr(car, 'give_reward') and self.timer_running:
-                # Time penalty - encourage faster lap times
-                penalty = TIME_PENALTY * time.dt
-                car.give_reward(penalty)
-                #print(f"Time penalty: {penalty:.2f}")
-             
-            # SPEED REWARD
-            if hasattr(car, 'give_reward') and self.timer_running:
-                # Speed reward - encourage maintaining good speed
-                if abs(car.speed) > MIN_SPEED_THRESHOLD:
-                    # Scale reward with speed and time
-                    reward = abs(car.speed) * SPEED_REWARD * time.dt
-                    car.give_reward(reward)
-                    
-                    # Extra reward for near max speed
-                    if car.speed > car.topspeed * 0.8:
-                        car.give_reward(reward * 2)
-                        #print(f"Speed reward: {reward:.2f} + bonus: {reward * 2:.2f}")
-                        
-                elif abs(car.speed) < MIN_SPEED_THRESHOLD:
-                    # Small penalty for very low speed
-                    penalty = -SPEED_REWARD * time.dt
-                    car.give_reward(penalty)
-                    #print(f"Speed penalty: {penalty:.2f}")
-
+        # Main learning loop for each car
+        for car in self._process_car_interactions():
+            self._handle_car_learning(car)
             
-            # Check for collisions with walls
-            if car.wall_hit:
-                if hasattr(car, 'give_reward'):
-                    car.give_reward(WALL_PENALTY)
-                    #print(f"Car {car} hit a wall! Giving penalty")
-
-            # CHECKPOINT REWARD
-            for i, cp in enumerate(self.checkpoints):
-                if car.simple_intersects(cp):
-                    result = self.handle_checkpoint(car, i)
-                    if result is True:
-                        if hasattr(car, 'give_reward'):
-                            car.give_reward(CHECKPOINT_REWARD)
-                    elif result is False:
-                        if hasattr(car, 'give_reward'):
-                            car.give_reward(WRONG_CHECKPOINT_PENALTY)
-
-                    # Give bonus for reinforcement learning
-                    # if hasattr(self.car, "give_bonus_reward"):
-                    #     self.car.give_bonus_reward(i)
-
-            state = car.get_state2(self.checkpoints)
-            action = None
-
-            # Random action for reinforcement learning
-            if car.rl and self.enabled and car.visible:
-                self.car_action_timers[car] += time.dt
-                if self.car_action_timers[car] >= self.action_interval:
-                    self.car_action_timers[car] = 0
-                    action = self.get_random_action(car)
-                    car.execute_action(action)
-
-            next_state = car.get_state2(self.checkpoints)
-
-            #GIVE rreward if its closer to the next checkpoint
-            if hasattr(car, 'give_reward'):
-                #get distances_to_next_checkpoint from state and next_state
-                previous_distance = state[7]
-                next_distance = next_state[7]
-                if next_distance < previous_distance:
-                    # Reward for getting closer to the next checkpoint
-                    car.give_reward(CHECKPOINT_REWARD * 0.01)
-                    #print(f"Car {car} got closer to the next checkpoint! Giving reward")
-                elif next_distance > previous_distance:
-                    # Penalty for getting further away from the next checkpoint
-                    car.give_reward(WRONG_CHECKPOINT_PENALTY * 0.01)
-                    #print(f"Car {car} got further from the next checkpoint! Giving penalty")
-
-            done = self._is_done(car)
-            reward = car.total_reward if hasattr(car, 'total_reward') else 0
-            
-
-            #print(f"Action: {action}, Reward: {reward}, State: {state}")
-            #store experience
-            if car in self.top_k_cars and action is not None:
-                self.DQNAgent.store_experience(
-                    state=state, 
-                    action=action, 
-                    reward=reward, 
-                    next_state=next_state, 
-                    done=done
-                )
-        self.DQNAgent.learn()
-        if self.current_episode % 10 == 0:
-            if not os.path.exists("models"):
-                os.makedirs("models")
-            self.DQNAgent.save_model(f"models/dqn_model_ep{self.current_episode}.pth")
 
     def exploitation_process(self):
+        """Exploitation phase - use trained model without learning"""
         if self.print_timer >= self.episode_length and REINFORCEMENT_LEARNING:
             self.print_timer = 0
             self.current_episode += 1
             for car in self.cars:
-                if hasattr(car, 'give_reward'):
-                    print(f"Total reward for car {car}: {car.total_reward}")
                 if hasattr(car, 'reset'):
                     car.reset()
-                self.current_waypoint_index = 0
 
-        for car in self.cars:
-            if car.simple_intersects(self.finish_line):
-                if car.anti_cheat == 1:
-                    if all(self.car_checkpoints[car]):
-                        print(f"Lap complete!")
-                    car.anti_cheat = 0
-                    car.next_checkpoint_index = 0
-                    self.car_checkpoints[car] = [False] * len(self.checkpoints)
-
-                self.wall1.enable()
-                self.wall2.enable()
-                self.wall3.disable()
-                self.wall4.disable()
-
-            if car.simple_intersects(self.wall_trigger):
-                self.wall1.disable()
-                self.wall2.disable()
-                self.wall3.enable()
-                self.wall4.enable()
-                car.anti_cheat = 0.5
-
-            if car.simple_intersects(self.wall_trigger_ramp):
-                if car.anti_cheat == 0.5:
-                    car.anti_cheat = 1
-
-            # TIME PENALTY
-            if hasattr(car, 'give_reward') and self.timer_running:
-                # Time penalty - encourage faster lap times
-                penalty = TIME_PENALTY * time.dt
-                car.give_reward(penalty)
-                #print(f"Time penalty: {penalty:.2f}")
-             
-            # SPEED REWARD
-            if hasattr(car, 'give_reward') and self.timer_running:
-                # Speed reward - encourage maintaining good speed
-                if abs(car.speed) > MIN_SPEED_THRESHOLD:
-                    # Scale reward with speed and time
-                    reward = abs(car.speed) * SPEED_REWARD * time.dt
-                    car.give_reward(reward)
-                    
-                    # Extra reward for near max speed
-                    if car.speed > car.topspeed * 0.8:
-                        car.give_reward(reward * 2)
-                        #print(f"Speed reward: {reward:.2f} + bonus: {reward * 2:.2f}")
-                        
-                elif abs(car.speed) < MIN_SPEED_THRESHOLD:
-                    # Small penalty for very low speed
-                    penalty = -SPEED_REWARD * time.dt
-                    car.give_reward(penalty)
-                    #print(f"Speed penalty: {penalty:.2f}")
-
-            
-            # Check for collisions with walls
-            if car.wall_hit:
-                if hasattr(car, 'give_reward'):
-                    car.give_reward(WALL_PENALTY)
-                    #print(f"Car {car} hit a wall! Giving penalty")
-
-            # CHECKPOINT REWARD
-            for i, cp in enumerate(self.checkpoints):
-                if car.simple_intersects(cp):
-                    result = self.handle_checkpoint(car, i)
-                    if result is True:
-                        if hasattr(car, 'give_reward'):
-                            car.give_reward(CHECKPOINT_REWARD)
-                    elif result is False:
-                        if hasattr(car, 'give_reward'):
-                            car.give_reward(WRONG_CHECKPOINT_PENALTY)
-
-                    # Give bonus for reinforcement learning
-                    # if hasattr(self.car, "give_bonus_reward"):
-                    #     self.car.give_bonus_reward(i)
-
-            state = car.get_state2(self.checkpoints)
-            action = None
-            # Random action for reinforcement learning
+        # Process car interactions (rewards still apply for monitoring)
+        for car in self._process_car_interactions():
+            # Use trained model for action selection (no learning)
             if car.rl and self.enabled and car.visible:
                 self.car_action_timers[car] += time.dt
                 if self.car_action_timers[car] >= self.action_interval:
                     self.car_action_timers[car] = 0
-                    action = self.DQNAgent.choose_action(state)
+                    state = car.get_state2(self.checkpoints)
+                    # Use exploitation mode (training=False)
+                    action = self.DQNAgent.choose_action(state, training=False)
                     car.execute_action(action)
-
-            next_state = car.get_state2(self.checkpoints)
-            #GIVE rreward if its closer to the next checkpoint
-            if hasattr(car, 'give_reward'):
-                #get distances_to_next_checkpoint from state and next_state
-                previous_distance = state[7]
-                next_distance = next_state[7]
-                if next_distance < previous_distance:
-                    # Reward for getting closer to the next checkpoint
-                    car.give_reward(CHECKPOINT_REWARD * 0.01)
-                    #print(f"Car {car} got closer to the next checkpoint! Giving reward")
-                elif next_distance > previous_distance:
-                    # Penalty for getting further away from the next checkpoint
-                    car.give_reward(WRONG_CHECKPOINT_PENALTY * 0.01)
-                    #print(f"Car {car} got further from the next checkpoint! Giving penalty")
-
-            done = self._is_done(car)
-            reward = car.total_reward if hasattr(car, 'total_reward') else 0
-            
-
-            #print(f"Action: {action}, Reward: {reward}, State: {state}")
-            #store experience
-            if car in self.top_k_cars and action is not None:
-                self.DQNAgent.store_experience(
-                    state=state, 
-                    action=action, 
-                    reward=reward, 
-                    next_state=next_state, 
-                    done=done
-                )
-        self.DQNAgent.learn()
-        if self.current_episode % 10 == 0:
-            if not os.path.exists("models"):
-                os.makedirs("models")
-            self.DQNAgent.save_model(f"models/dqn_model_ep{self.current_episode}.pth")
 
 
     def update(self):
