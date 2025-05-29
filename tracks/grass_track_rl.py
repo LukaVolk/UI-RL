@@ -25,12 +25,13 @@ class GrassTrackRL(Entity):
         self.current_episode = 0
         self.episode_length = EPISODE_LENGTH
         self.car_action_queues = []
-
         self.print_timer = 0
         self.is_learning = False
         self.is_reinforcement_learning = False
 
         self.top_k_cars = set()  # Set to store top K cars
+
+        self.action_counts = {action: 0 for action in range(len(ACTION_MAP))}
 
         #timer
         self.timer_running = False
@@ -183,6 +184,16 @@ class GrassTrackRL(Entity):
             sorted_cars = sorted(self.cars, key=lambda c: car_rewards[c], reverse=True)
             self.top_k_cars = set(sorted_cars[:TOP_K])
 
+            total_actions = sum(self.action_counts.values())
+            if total_actions > 0:
+                print("\n📊 Action distribution this episode:")
+                for action, count in sorted(self.action_counts.items()):
+                    percentage = 100 * count / total_actions
+                    print(f"Action {action}: {count} ({percentage:.2f}%) -> {ACTION_MAP[action]}")
+
+            # Reset for next episode
+            self.action_counts = {action: 0 for action in range(len(ACTION_MAP))}
+
             print(f"Top {TOP_K} cars this episode:")
             for c in self.top_k_cars:
                 print(f" - {c} with reward {car_rewards[c]:.2f}")
@@ -234,10 +245,10 @@ class GrassTrackRL(Entity):
             if hasattr(car, 'give_reward') and self.timer_running:
                 # Speed reward - encourage maintaining good speed
                 if abs(car.speed) > MIN_SPEED_THRESHOLD:
-                    # Scale reward with speed and time
-                    reward = abs(car.speed) * SPEED_REWARD * time.dt
+                    # Scale reward with speed
+                    reward = abs(car.speed) * SPEED_REWARD
                     car.give_reward(reward)
-                    
+                    #print(f"Speed reward: {reward:.2f}")
                     # Extra reward for near max speed
                     if car.speed > car.topspeed * 0.8:
                         car.give_reward(reward * 2)
@@ -245,7 +256,7 @@ class GrassTrackRL(Entity):
                         
                 elif abs(car.speed) < MIN_SPEED_THRESHOLD:
                     # Small penalty for very low speed
-                    penalty = -SPEED_REWARD * time.dt
+                    penalty = SPEED_PENALTY
                     car.give_reward(penalty)
                     #print(f"Speed penalty: {penalty:.2f}")
 
@@ -279,8 +290,9 @@ class GrassTrackRL(Entity):
                 if self.car_action_timers[car] >= self.action_interval:
                     self.car_action_timers[car] = 0
                     action = self.DQNAgent.choose_action(state)
+                    self.action_counts[action] += 1
+                
                     car.execute_action(action)
-
             
             reward = car.total_reward if hasattr(car, 'total_reward') else 0
             next_state = car.get_state2(self.checkpoints)

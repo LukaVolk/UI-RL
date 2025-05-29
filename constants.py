@@ -11,7 +11,7 @@ TOP_K = 5 # Number of top cars to learn from
 EPISODE_LENGTH = 30
 EPISODE_NUMBERS = 1500
 ACTION_INTERVAL = 0.1 # Time interval between actions in seconds
-OBESERVATION_SIZE = 9+5 # Number of sensors + speed + angle + distance to next checkpoint
+OBESERVATION_SIZE = 9+8 # Number of sensors + speed + angle + distance to next checkpoint
 
 # SCORING
 # Checkpoint rewards
@@ -29,12 +29,11 @@ SPEED_PENALTY = -0.5
 MIN_SPEED_THRESHOLD = 5
 
 ACTION_MAP = {
-    0: [],
-    1: ['forward'],
-    2: ['forward', 'left'],
-    3: ['forward', 'right'],
-    4: ['back'],
-    5: ['handbrake'],
-    6: ['left'],
-    7: ['right']
+    0: ['forward'],
+    1: ['forward', 'left'],
+    2: ['forward', 'right'],
+    #3: ['back'],
+    3: [],
+    4: ['left'],
+    5: ['right']
 }

@@ -151,7 +151,7 @@ class CarRL(Entity):
 
         # Show sensors
         if self.show_sensors and self.gamemode == "race":
-            for _ in range(5):
+            for _ in range(8):
                 ray = Entity(model='cube', scale=(0.1, 0.1, self.sensor_length), color=color.green)
                 ray.disable()
                 self.sensor_rays.append(ray)
@@ -295,6 +295,9 @@ class CarRL(Entity):
             (1, 0, 0),      # Right
             (-1, 0, 0),     # Left
             (-0.7, 0, 0.7), # Forward Left
+            (0, 0, -1),     # Backward
+            (0.7, 0, -0.7), # Backward Right
+            (-0.7, 0, -0.7) # Backward Left
         ]
         
         distances = []
