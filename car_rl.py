@@ -489,7 +489,8 @@ class CarRL(Entity):
         sensor_distances = self.get_sensor_distances(self.next_checkpoint_index) 
         normalized_distances = [d / self.sensor_length for d in sensor_distances]
 
-
+        #print(f"Sensor distances: {normalized_distances}")
+        #print(f"Normalized distances to next checkpoint: {normalized_dist_to_next_cp}")
         # --- 3. Construct the flat state array ---
         # Flatten all relevant features into a single NumPy array
         # This order should be consistent for your neural network input layer.

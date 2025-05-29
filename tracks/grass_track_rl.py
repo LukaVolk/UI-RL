@@ -2,6 +2,8 @@ from ursina import *
 import random
 from constants import *
 from reinforcment_learning import DQNAgent
+import os
+
 class GrassTrackRL(Entity):
     def __init__(self, cars):
         application.audio = False
@@ -180,6 +182,7 @@ class GrassTrackRL(Entity):
             self.current_episode += 1
             # Store current episode rewards
             car_rewards = {car: car.total_reward for car in self.cars}
+            print(f"Rewards this episode: {car_rewards}")
             sorted_cars = sorted(self.cars, key=lambda c: car_rewards[c], reverse=True)
             self.top_k_cars = set(sorted_cars[:TOP_K])
 
@@ -270,21 +273,37 @@ class GrassTrackRL(Entity):
                     # Give bonus for reinforcement learning
                     # if hasattr(self.car, "give_bonus_reward"):
                     #     self.car.give_bonus_reward(i)
-        
+
             state = car.get_state2(self.checkpoints)
             action = None
+
             # Random action for reinforcement learning
             if car.rl and self.enabled and car.visible:
                 self.car_action_timers[car] += time.dt
                 if self.car_action_timers[car] >= self.action_interval:
                     self.car_action_timers[car] = 0
-                    action = self.DQNAgent.choose_action(state)
+                    action = self.get_random_action(car)
                     car.execute_action(action)
 
-            
-            reward = car.total_reward if hasattr(car, 'total_reward') else 0
             next_state = car.get_state2(self.checkpoints)
+
+            #GIVE rreward if its closer to the next checkpoint
+            if hasattr(car, 'give_reward'):
+                #get distances_to_next_checkpoint from state and next_state
+                previous_distance = state[7]
+                next_distance = next_state[7]
+                if next_distance < previous_distance:
+                    # Reward for getting closer to the next checkpoint
+                    car.give_reward(CHECKPOINT_REWARD * 0.01)
+                    #print(f"Car {car} got closer to the next checkpoint! Giving reward")
+                elif next_distance > previous_distance:
+                    # Penalty for getting further away from the next checkpoint
+                    car.give_reward(WRONG_CHECKPOINT_PENALTY * 0.01)
+                    #print(f"Car {car} got further from the next checkpoint! Giving penalty")
+
             done = self._is_done(car)
+            reward = car.total_reward if hasattr(car, 'total_reward') else 0
+            
 
             #print(f"Action: {action}, Reward: {reward}, State: {state}")
             #store experience
@@ -298,6 +317,8 @@ class GrassTrackRL(Entity):
                 )
         self.DQNAgent.learn()
         if self.current_episode % 10 == 0:
+            if not os.path.exists("models"):
+                os.makedirs("models")
             self.DQNAgent.save_model(f"models/dqn_model_ep{self.current_episode}.pth")
 
     def exploitation_process(self):
@@ -305,6 +326,8 @@ class GrassTrackRL(Entity):
             self.print_timer = 0
             self.current_episode += 1
             for car in self.cars:
+                if hasattr(car, 'give_reward'):
+                    print(f"Total reward for car {car}: {car.total_reward}")
                 if hasattr(car, 'reset'):
                     car.reset()
                 self.current_waypoint_index = 0
@@ -334,14 +357,98 @@ class GrassTrackRL(Entity):
                 if car.anti_cheat == 0.5:
                     car.anti_cheat = 1
 
-            # Skip car control if not enabled
+            # TIME PENALTY
+            if hasattr(car, 'give_reward') and self.timer_running:
+                # Time penalty - encourage faster lap times
+                penalty = TIME_PENALTY * time.dt
+                car.give_reward(penalty)
+                #print(f"Time penalty: {penalty:.2f}")
+             
+            # SPEED REWARD
+            if hasattr(car, 'give_reward') and self.timer_running:
+                # Speed reward - encourage maintaining good speed
+                if abs(car.speed) > MIN_SPEED_THRESHOLD:
+                    # Scale reward with speed and time
+                    reward = abs(car.speed) * SPEED_REWARD * time.dt
+                    car.give_reward(reward)
+                    
+                    # Extra reward for near max speed
+                    if car.speed > car.topspeed * 0.8:
+                        car.give_reward(reward * 2)
+                        #print(f"Speed reward: {reward:.2f} + bonus: {reward * 2:.2f}")
+                        
+                elif abs(car.speed) < MIN_SPEED_THRESHOLD:
+                    # Small penalty for very low speed
+                    penalty = -SPEED_REWARD * time.dt
+                    car.give_reward(penalty)
+                    #print(f"Speed penalty: {penalty:.2f}")
+
+            
+            # Check for collisions with walls
+            if car.wall_hit:
+                if hasattr(car, 'give_reward'):
+                    car.give_reward(WALL_PENALTY)
+                    #print(f"Car {car} hit a wall! Giving penalty")
+
+            # CHECKPOINT REWARD
+            for i, cp in enumerate(self.checkpoints):
+                if car.simple_intersects(cp):
+                    result = self.handle_checkpoint(car, i)
+                    if result is True:
+                        if hasattr(car, 'give_reward'):
+                            car.give_reward(CHECKPOINT_REWARD)
+                    elif result is False:
+                        if hasattr(car, 'give_reward'):
+                            car.give_reward(WRONG_CHECKPOINT_PENALTY)
+
+                    # Give bonus for reinforcement learning
+                    # if hasattr(self.car, "give_bonus_reward"):
+                    #     self.car.give_bonus_reward(i)
+
+            state = car.get_state2(self.checkpoints)
+            action = None
+            # Random action for reinforcement learning
             if car.rl and self.enabled and car.visible:
                 self.car_action_timers[car] += time.dt
                 if self.car_action_timers[car] >= self.action_interval:
                     self.car_action_timers[car] = 0
-                    state = car.get_state2(self.checkpoints)
                     action = self.DQNAgent.choose_action(state)
                     car.execute_action(action)
+
+            next_state = car.get_state2(self.checkpoints)
+            #GIVE rreward if its closer to the next checkpoint
+            if hasattr(car, 'give_reward'):
+                #get distances_to_next_checkpoint from state and next_state
+                previous_distance = state[7]
+                next_distance = next_state[7]
+                if next_distance < previous_distance:
+                    # Reward for getting closer to the next checkpoint
+                    car.give_reward(CHECKPOINT_REWARD * 0.01)
+                    #print(f"Car {car} got closer to the next checkpoint! Giving reward")
+                elif next_distance > previous_distance:
+                    # Penalty for getting further away from the next checkpoint
+                    car.give_reward(WRONG_CHECKPOINT_PENALTY * 0.01)
+                    #print(f"Car {car} got further from the next checkpoint! Giving penalty")
+
+            done = self._is_done(car)
+            reward = car.total_reward if hasattr(car, 'total_reward') else 0
+            
+
+            #print(f"Action: {action}, Reward: {reward}, State: {state}")
+            #store experience
+            if car in self.top_k_cars and action is not None:
+                self.DQNAgent.store_experience(
+                    state=state, 
+                    action=action, 
+                    reward=reward, 
+                    next_state=next_state, 
+                    done=done
+                )
+        self.DQNAgent.learn()
+        if self.current_episode % 10 == 0:
+            if not os.path.exists("models"):
+                os.makedirs("models")
+            self.DQNAgent.save_model(f"models/dqn_model_ep{self.current_episode}.pth")
 
 
     def update(self):
