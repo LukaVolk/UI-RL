@@ -1,4 +1,4 @@
-CAR_INSTANCES = 15
+CAR_INSTANCES = 13
 REINFORCEMENT_LEARNING = True
 SHOW_CHECKPOINTS = True
 SHOW_WALLS = False
@@ -20,14 +20,14 @@ WRONG_CHECKPOINT_PENALTY = -5000 # DONE
 
 # Terminal rewards
 FINISH_LINE_REWARD = 10000 # DONE
-WALL_PENALTY = -10 # Increased penalty for hitting walls
+WALL_PENALTY = -50 # Increased penalty for hitting walls
 
 # Continuous rewards
 TIME_PENALTY = -0.1 # Reduced time penalty
 SPEED_REWARD = 2.0 # Increased speed reward to encourage forward movement
 SPEED_PENALTY = -5.0 # Increased penalty for low speed
 BACKWARD_PENALTY = -10.0 # New: penalty for moving backward
-PROGRESS_REWARD = 1.0 # New: reward for making progress toward checkpoint
+PROGRESS_REWARD = 20 # New: reward for making progress toward checkpoint
 MIN_SPEED_THRESHOLD = 5
 MIN_FORWARD_SPEED = 1.0 # New: minimum forward speed threshold
 
